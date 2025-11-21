@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+bcrypt
+aiofiles
+python-dotenv
+itsdangerous>=2.1.2
+
