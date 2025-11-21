@@ -163,12 +163,11 @@ async function addPurchase(){
   alert("Purchase added");
 }
 
-async function showPurchases(){
-  const data = await api("/api/purchases");
-  let s = "Purchases:\\n";
-  data.purchases.forEach(p => s += `${p.ID} | ${p.Date} ${p.Time} | ${p.Customer} | ${p.Items} | ${p.Amount} | ${p.Owner}\\n`);
-  alert(s || "No purchases");
+function showPurchases() {
+    window.open("http://192.168.192.1:8000/purchases", "_blank");
 }
+
+
 
 async function filterRecords(customer){
   const data = await api("/api/credits");

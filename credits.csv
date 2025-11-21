@@ -2,3 +2,4 @@ ID,Date,Time,Customer,Description,Credit,Payment,Balance,Owner
 1,2025-11-21,15:21:49,Kashif,Printing,450,0,450,admin
 2,2025-11-21,15:22:19,Kashif,Paid,0,200,250,admin
 3,2025-11-21,15:23:13,Kashif,Printing agreement,200,0,450,naseer
+4,2025-11-21,15:44:55,Amir,Printing,300,0,300,naseer

@@ -135,6 +135,59 @@ def next_purchase_id():
         reader = csv.DictReader(f)
         ids = [int(r["ID"]) for r in reader if r.get("ID") and r["ID"].isdigit()]
         return str(max(ids)+1) if ids else "1"
+    
+from fastapi.responses import HTMLResponse
+
+@app.get("/purchases", response_class=HTMLResponse)
+async def purchases_page():
+    rows = read_purchases()
+
+    html = """
+    <html>
+    <head>
+        <title>Purchases</title>
+        <style>
+            body { font-family: Arial; padding: 20px; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+            th { background: #f2f2f2; }
+            tr:nth-child(even) { background: #fafafa; }
+        </style>
+    </head>
+    <body>
+        <h2>All Purchases</h2>
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Amount</th>
+                <th>Owner</th>
+            </tr>
+    """
+
+    for row in rows:
+        html += f"""
+            <tr>
+                <td>{row.get("ID","")}</td>
+                <td>{row.get("Date","")}</td>
+                <td>{row.get("Time","")}</td>
+                <td>{row.get("Customer","")}</td>
+                <td>{row.get("Items","")}</td>
+                <td>{row.get("Amount","")}</td>
+                <td>{row.get("Owner","")}</td>
+            </tr>
+        """
+
+    html += """
+        </table>
+    </body>
+    </html>
+    """
+
+    return HTMLResponse(content=html)
 
 # ---------- Authentication helpers ----------
 def require_login(request: Request):
