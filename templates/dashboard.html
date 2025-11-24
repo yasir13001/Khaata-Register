@@ -78,7 +78,23 @@
 
       <div style="overflow:auto;height:50vh">
         <table id="records-table">
-          <thead><tr><th>ID</th><th>Date</th><th>Time</th><th>Customer</th><th>Description</th><th>Credit</th><th>Payment</th><th>Balance</th><th>Owner</th></tr></thead>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Customer</th>
+              <th>Description</th>
+              <th>Credit</th>
+              <th>Payment</th>
+              <th>Balance</th>
+              <th>Owner</th>
+              {% if role == "admin" %}
+              <th>Actions</th>  <!-- <- put it here, inside the header row -->
+              {% endif %}
+            </tr>
+          </thead>
+
           <tbody></tbody>
         </table>
       </div>
@@ -86,6 +102,7 @@
   </div>
 
 <script>
+const role = "{{ role }}";
 async function api(path, opts={}) {
   const res = await fetch(path, opts);
   if (!res.ok) {
@@ -119,21 +136,49 @@ async function loadRecords(showAll=false) {
   const term = document.getElementById("search-term").value.trim();
   const data = await api("/api/credits");
   let rows = data.records;
+  
   if (!showAll && term) {
     rows = rows.filter(r => r.Customer && r.Customer.toLowerCase().includes(term.toLowerCase()));
   }
+  
   const tbody = document.querySelector("#records-table tbody");
   tbody.innerHTML = "";
+
+  // assuming role is defined globally, e.g., const role = "{{ role }}";
+  const isAdmin = role === "admin";
+
   rows.forEach(r => {
     const tr = document.createElement("tr");
-    ["ID","Date","Time","Customer","Description","Credit","Payment","Balance","Owner"].forEach(k=>{
+
+    ["ID","Date","Time","Customer","Description","Credit","Payment","Balance","Owner"].forEach(k => {
       const td = document.createElement("td");
       td.textContent = r[k] ?? "";
       tr.appendChild(td);
     });
+
+    if (isAdmin) {
+      const tdActions = document.createElement("td");
+
+      const btnEdit = document.createElement("button");
+      btnEdit.textContent = "Edit";
+      btnEdit.className = "btn";
+      btnEdit.style.marginRight = "4px";
+      btnEdit.onclick = () => editRecord(r.ID);
+
+      const btnDelete = document.createElement("button");
+      btnDelete.textContent = "Delete";
+      btnDelete.className = "btn";
+      btnDelete.onclick = () => deleteRecord(r.ID);
+
+      tdActions.appendChild(btnEdit);
+      tdActions.appendChild(btnDelete);
+      tr.appendChild(tdActions);
+    }
+
     tbody.appendChild(tr);
   });
 }
+
 
 async function addCredit(){
   const customer = document.getElementById("credit-customer").value.trim();
@@ -218,6 +263,37 @@ function clearRecordsTable() {
     if (tbody) tbody.innerHTML = "";
 }
 
+function makeRowEditable(tr) {
+  const cells = tr.querySelectorAll("td[data-field]");
+  cells.forEach(td => {
+    const field = td.dataset.field;
+    if (["ID","Date","Time","Balance","Owner"].includes(field)) return; // skip read-only fields
+
+    const input = document.createElement("input");
+    input.value = td.textContent;
+    input.style.width = "100%";
+    td.textContent = "";
+    td.appendChild(input);
+  });
+
+  // Replace Edit button with Save & Cancel
+  const actionTd = tr.querySelector("td:last-child");
+  actionTd.innerHTML = "";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.textContent = "Save";
+  saveBtn.className = "btn";
+  saveBtn.onclick = () => saveRecord(tr);
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.className = "btn";
+  cancelBtn.onclick = () => loadRecords(true); // reload to cancel edit
+
+  actionTd.appendChild(saveBtn);
+  actionTd.appendChild(cancelBtn);
+}
+
 async function filterRecords(customer){
   const data = await api("/api/credits");
   const rows = data.records.filter(r => r.Customer === customer);
@@ -233,6 +309,79 @@ async function filterRecords(customer){
     tbody.appendChild(tr);
   });
 }
+
+async function editRecord(id){
+  const newDesc = prompt("Enter new description:");
+  if(newDesc === null) return;  // user canceled
+  await api("/api/edit_record/" + id, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ Description: newDesc })
+  });
+  loadRecords(true);
+}
+
+async function loadRecords(showAll=false) {
+  const term = document.getElementById("search-term").value.trim();
+  const data = await api("/api/credits");
+  let rows = data.records;
+  if (!showAll && term) {
+    rows = rows.filter(r => r.Customer && r.Customer.toLowerCase().includes(term.toLowerCase()));
+  }
+
+  const tbody = document.querySelector("#records-table tbody");
+  tbody.innerHTML = "";
+
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    ["ID","Date","Time","Customer","Description","Credit","Payment","Balance","Owner"].forEach(k=>{
+      const td = document.createElement("td");
+      td.textContent = r[k] ?? "";
+      td.dataset.field = k;          // store field name for editing
+      td.dataset.id = r.ID;           // store record ID
+      tr.appendChild(td);
+    });
+
+    // Actions column
+    const actionTd = document.createElement("td");
+
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "Edit";
+    editBtn.className = "btn";
+    editBtn.onclick = () => makeRowEditable(tr);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.textContent = "Delete";
+    deleteBtn.className = "btn";
+    deleteBtn.onclick = () => deleteRecord(r.ID);
+
+    actionTd.appendChild(editBtn);
+    actionTd.appendChild(deleteBtn);
+    tr.appendChild(actionTd);
+
+    tbody.appendChild(tr);
+  });
+}
+async function saveRecord(tr) {
+  const id = tr.querySelector("td[data-field='ID']").textContent;
+  const updated = {};
+  
+  tr.querySelectorAll("td[data-field]").forEach(td => {
+    const input = td.querySelector("input");
+    if (input) updated[td.dataset.field] = input.value;
+  });
+
+  if (Object.keys(updated).length === 0) return;
+
+  await api(`/api/edit_credit/${id}`, {
+    method: "POST",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify(updated)
+  });
+
+  loadRecords(true); // reload table after save
+}
+
 async function onTypingCustomer(e) {
     let typed = e.target.value.trim().toLowerCase();
     if (!typed) return;
@@ -247,6 +396,11 @@ async function onTypingCustomer(e) {
     }
 }
 
+async function deleteRecord(id) {
+  if (!confirm("Delete this record?")) return;
+  await api(`/api/delete_record/${id}`, { method: "DELETE" });
+  loadRecords(true);
+}
 async function downloadCSV(){
   const res = await fetch("/api/download/credits");
   if(!res.ok){ alert("download failed"); return; }

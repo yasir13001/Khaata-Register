@@ -11,6 +11,17 @@ from decimal import Decimal, InvalidOperation
 import bcrypt
 from collections import defaultdict
 import uuid
+from pydantic import BaseModel
+import secrets
+secrets.token_hex(32)
+
+
+
+app = FastAPI()
+
+
+# Add this middleware
+app.add_middleware(SessionMiddleware, secret_key=secrets)
 
 # ---------- Config ----------
 APP_SECRET = os.environ.get("APP_SECRET", "change-this-secret-to-a-random-string")
@@ -21,9 +32,6 @@ PURCHASES_FILE = "purchases.csv"
 FIELDNAMES = ["ID", "Date", "Time", "Customer", "Description", "Credit", "Payment", "Balance", "Owner"]
 PURCHASE_FIELDS = ["ID", "Date", "Time", "Customer", "Items", "Amount", "Owner"]
 DATE_FORMAT = "%Y-%m-%d"
-
-app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key=APP_SECRET)
 
 # Serve templates/static (create these folders)
 templates = Jinja2Templates(directory="templates")
@@ -93,6 +101,44 @@ def write_credit(record):
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
         writer.writerow(record)
 
+def edit_credit(record_id: str, updates: dict):
+    records = read_credits()
+    updated = False
+
+    # Update the target record
+    for r in records:
+        if r["ID"] == record_id:
+            for k, v in updates.items():
+                if k in FIELDNAMES:
+                    r[k] = v
+            updated = True
+            break
+
+    if not updated:
+        return False
+
+    # Sort records by ID (numerical) to maintain chronological order
+    records.sort(key=lambda x: int(x["ID"]))
+
+    # Recalculate balances per customer
+    balances = {}  # customer -> current balance
+    for r in records:
+        customer = r.get("Customer", "")
+        if customer not in balances:
+            balances[customer] = 0
+        credit = int(r.get("Credit") or 0)
+        payment = int(r.get("Payment") or 0)
+        balances[customer] += credit - payment
+        r["Balance"] = str(balances[customer])  # keep as string, no float
+
+    # Rewrite CSV
+    with open(CREDITS_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(records)
+
+    return True
+
 def next_credit_id():
     if not os.path.exists(CREDITS_FILE):
         return "1"
@@ -134,6 +180,78 @@ def next_purchase_id():
         reader = csv.DictReader(f)
         ids = [int(r["ID"]) for r in reader if r.get("ID") and r["ID"].isdigit()]
         return str(max(ids)+1) if ids else "1"
+    
+def delete_credit(record_id: str):
+    records = read_credits()
+    new_records = [r for r in records if r["ID"] != record_id]
+
+    if len(records) == len(new_records):
+        return False  # not found
+
+    # Recalculate balances per customer
+    customer_balances = {}
+    for r in new_records:
+        cust = r["Customer"]
+        credit = float(r.get("Credit") or 0)
+        payment = float(r.get("Payment") or 0)
+        prev_balance = customer_balances.get(cust, 0)
+        new_balance = prev_balance + credit - payment
+        r["Balance"] = str(new_balance)  # store as string for CSV
+        customer_balances[cust] = new_balance
+
+    # Rewrite the CSV
+    with open(CREDITS_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(new_records)
+
+    return True
+
+
+def require_admin(request: Request):
+    username = request.session.get("user")  # use "user" instead of "username"
+    if not username:
+        raise HTTPException(status_code=401, detail="Not logged in")
+
+    role = get_user_role(username)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    return username
+
+# ---------------------------
+# Admin permission check
+# ---------------------------
+
+@app.get("/debug-session")
+def debug_session(request: Request):
+    return {"session": dict(request.session)}
+
+@app.delete("/api/delete_record/{record_id}")
+def api_delete_record(record_id: str, admin=Depends(require_admin)):
+    print(record_id)
+    if not delete_credit(record_id):
+        raise HTTPException(status_code=404, detail="Record not found")
+    return {"status": "deleted", "id": record_id}
+
+
+class CreditUpdate(BaseModel):
+    Customer: str | None = None
+    Description: str | None = None
+    Credit: str | None = None
+    Payment: str | None = None
+
+@app.post("/api/edit_credit/{record_id}")
+async def api_edit_credit(record_id: str, update: CreditUpdate):
+    updates = {k: v for k, v in update.dict(exclude_unset=True).items()}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+
+    success = edit_credit(record_id, updates)
+    if not success:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    return {"status": "success", "id": record_id, "updates": updates}
     
 @app.get("/purchases", response_class=HTMLResponse)
 async def purchases_page():
