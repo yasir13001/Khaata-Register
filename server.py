@@ -207,6 +207,9 @@ def delete_credit(record_id: str):
 
     return True
 
+# ---------------------------
+# Admin permission check
+# ---------------------------
 
 def require_admin(request: Request):
     username = request.session.get("user")  # use "user" instead of "username"
@@ -219,9 +222,6 @@ def require_admin(request: Request):
 
     return username
 
-# ---------------------------
-# Admin permission check
-# ---------------------------
 
 @app.get("/debug-session")
 def debug_session(request: Request):
@@ -229,7 +229,6 @@ def debug_session(request: Request):
 
 @app.delete("/api/delete_record/{record_id}")
 def api_delete_record(record_id: str, admin=Depends(require_admin)):
-    print(record_id)
     if not delete_credit(record_id):
         raise HTTPException(status_code=404, detail="Record not found")
     return {"status": "deleted", "id": record_id}

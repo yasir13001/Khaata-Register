@@ -4,3 +4,4 @@ ID,Date,Time,Customer,Description,Credit,Payment,Balance,Owner
 3,2025-11-24,15:29:30,Kashif,Chalan,1000,0,1150,admin
 4,2025-11-24,15:30:21,Amir,Printing tenent,200,0,200,naseer
 5,2025-11-24,15:30:41,Amir,Paid,0,100,100,naseer
+6,2025-11-24,15:37:15,Kashif,Printing,500,0,1650,naseer

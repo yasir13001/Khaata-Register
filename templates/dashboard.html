@@ -256,8 +256,11 @@ async function filterCustomerList() {
 
 
 function showPurchases() {
-    window.open("http://192.168.192.1:8000/purchases", "_blank");
+    const { protocol, host } = window.location; // host includes hostname:port
+    const url = `${protocol}//${host}/purchases`;
+    window.open(url, "_blank");
 }
+
 function clearRecordsTable() {
     const tbody = document.querySelector("#records-table tbody");
     if (tbody) tbody.innerHTML = "";
