@@ -30,7 +30,7 @@
   <div class="container">
     <div class="left">
       <h4>Customers</h4>
-      <input id="cust-filter" placeholder="Search customers..." style="width:100%;padding:6px;margin-bottom:8px">
+      <input id="cust-filter" placeholder="Search customers..." style="width:80%;padding:6px;margin-bottom:8px">
       <ul id="customers" style="list-style:none;padding:0;margin:0"></ul>
       <hr>
       <h4>Purchases</h4>
@@ -60,8 +60,9 @@
         <div style="flex:1">
           <h4>Add Purchase</h4>
           <div class="form-row"><label>Customer</label><input id="purchase-customer"></div>
-          <div class="form-row"><label>Items</label><input id="purchase-items"></div>
           <div class="form-row"><label>Amount</label><input id="purchase-amount" type="number" step="0.01"></div>
+          <div class="form-row"><label>Items</label><input id="purchase-items"></div>
+          
           <button class="btn" onclick="addPurchase()">Add Purchase</button>
         </div>
       </div>
@@ -140,7 +141,15 @@ async function addCredit(){
   const description = document.getElementById("credit-desc").value;
   if(!customer || !amount){ alert("fill fields"); return; }
   await api("/api/add_credit", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({customer, amount, description})});
-  alert("Credit added");
+  // alert("Credit added");
+    // CLEAR FIELDS
+  document.getElementById("credit-customer").value = "";
+  document.getElementById("pay-customer").value = "";
+  document.getElementById("purchase-customer").value = "";
+
+  document.getElementById("credit-amount").value = "";
+  document.getElementById("credit-desc").value = "";
+
   refreshCustomers(); loadRecords(true);
 }
 
@@ -150,7 +159,14 @@ async function addPayment(){
   const description = document.getElementById("pay-desc").value;
   if(!customer || !amount){ alert("fill fields"); return; }
   await api("/api/add_payment", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({customer, amount, description})});
-  alert("Payment recorded");
+  // alert("Payment recorded");
+  // CLEAR FIELDS
+  document.getElementById("credit-customer").value = "";
+  document.getElementById("purchase-customer").value = "";
+  document.getElementById("pay-customer").value = "";
+  document.getElementById("pay-amount").value = "";
+  document.getElementById("pay-desc").value = "";
+
   refreshCustomers(); loadRecords(true);
 }
 
@@ -160,14 +176,47 @@ async function addPurchase(){
   const amount = document.getElementById("purchase-amount").value;
   if(!customer || !items || !amount){ alert("fill fields"); return; }
   await api("/api/add_purchase", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({customer, items, amount})});
-  alert("Purchase added");
+  // alert("Purchase added");
+
+  // CLEAR FIELDS
+  document.getElementById("purchase-customer").value = "";
+  document.getElementById("credit-customer").value = "";
+  document.getElementById("purchase-customer").value = "";
+  document.getElementById("purchase-items").value = "";
+  document.getElementById("purchase-amount").value = "";
+
 }
+async function filterCustomerList() {
+    const term = document.getElementById("cust-filter").value.trim().toLowerCase();
+    const data = await api("/api/customers");
+    const ul = document.getElementById("customers");
+    ul.innerHTML = "";
+
+    data.customers
+        .filter(c => c.toLowerCase().includes(term))
+        .forEach(c => {
+            const li = document.createElement("li");
+            li.style.padding = "6px";
+            li.style.cursor = "pointer";
+            li.textContent = c;
+            li.onclick = () => {
+                document.getElementById("credit-customer").value = c;
+                document.getElementById("pay-customer").value = c;
+                document.getElementById("purchase-customer").value = c;
+                filterRecords(c);
+            };
+            ul.appendChild(li);
+        });
+}
+
 
 function showPurchases() {
     window.open("http://192.168.192.1:8000/purchases", "_blank");
 }
-
-
+function clearRecordsTable() {
+    const tbody = document.querySelector("#records-table tbody");
+    if (tbody) tbody.innerHTML = "";
+}
 
 async function filterRecords(customer){
   const data = await api("/api/credits");
@@ -184,6 +233,19 @@ async function filterRecords(customer){
     tbody.appendChild(tr);
   });
 }
+async function onTypingCustomer(e) {
+    let typed = e.target.value.trim().toLowerCase();
+    if (!typed) return;
+
+    // Get customer list from backend
+    const data = await api("/api/customers");
+    const customers = data.customers.map(c => c.toLowerCase());
+
+    // If new customer typed → clear table
+    if (!customers.includes(typed)) {
+        clearRecordsTable();
+    }
+}
 
 async function downloadCSV(){
   const res = await fetch("/api/download/credits");
@@ -195,6 +257,10 @@ async function downloadCSV(){
   a.href = url; a.download = "credits_export.csv"; a.click();
   URL.revokeObjectURL(url);
 }
+document.getElementById("credit-customer").addEventListener("input", onTypingCustomer);
+document.getElementById("pay-customer").addEventListener("input", onTypingCustomer);
+document.getElementById("purchase-customer").addEventListener("input", onTypingCustomer);
+document.getElementById("cust-filter").addEventListener("input", filterCustomerList);
 
 window.addEventListener("load", ()=>{ refreshCustomers(); loadRecords(true); });
 </script>

@@ -31,7 +31,6 @@ if not os.path.exists("static"):
     os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
 # ---------- Helpers: Users ----------
 def ensure_user_file():
     if not os.path.exists(USER_FILE):
@@ -136,8 +135,6 @@ def next_purchase_id():
         ids = [int(r["ID"]) for r in reader if r.get("ID") and r["ID"].isdigit()]
         return str(max(ids)+1) if ids else "1"
     
-from fastapi.responses import HTMLResponse
-
 @app.get("/purchases", response_class=HTMLResponse)
 async def purchases_page():
     rows = read_purchases()

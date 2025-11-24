@@ -3,3 +3,10 @@ ID,Date,Time,Customer,Description,Credit,Payment,Balance,Owner
 2,2025-11-21,15:22:19,Kashif,Paid,0,200,250,admin
 3,2025-11-21,15:23:13,Kashif,Printing agreement,200,0,450,naseer
 4,2025-11-21,15:44:55,Amir,Printing,300,0,300,naseer
+5,2025-11-24,12:02:04,Shuja,Printing sale agreement,340,0,340,naseer
+6,2025-11-24,12:03:47,Shuja,"Tea, samosa",200,0,540,naseer
+7,2025-11-24,12:04:19,Shuja,Paid,0,200,340,naseer
+8,2025-11-24,12:08:27,Kashif,Printing tenent agreement,355,0,805,naseer
+9,2025-11-24,12:10:34,Kashif,Paid,0,500,305,naseer
+10,2025-11-24,12:10:43,Shuja,Tea,200,0,540,naseer
+11,2025-11-24,12:19:33,shuja,Printing sale agreement,550,0,550,admin

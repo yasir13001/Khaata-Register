@@ -1,3 +1,5 @@
 ID,Date,Time,Customer,Items,Amount,Owner
 1,2025-11-21,15:24:05,Yasir,Mouse,450,naseer
 2,2025-11-21,15:50:36,Amir,Keyboard,1000,naseer
+3,2025-11-24,12:04:41,Shuja,Mouse,300,naseer
+4,2025-11-24,12:10:58,Kashif,Mouse,1000,naseer
