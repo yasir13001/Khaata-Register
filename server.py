@@ -15,8 +15,6 @@ from pydantic import BaseModel
 import secrets
 secrets.token_hex(32)
 
-
-
 app = FastAPI()
 
 
@@ -24,7 +22,6 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=secrets)
 
 # ---------- Config ----------
-APP_SECRET = os.environ.get("APP_SECRET", "change-this-secret-to-a-random-string")
 USER_FILE = "users.csv"
 CREDITS_FILE = "credits.csv"
 PURCHASES_FILE = "purchases.csv"
@@ -210,7 +207,6 @@ def delete_credit(record_id: str):
 # ---------------------------
 # Admin permission check
 # ---------------------------
-
 def require_admin(request: Request):
     username = request.session.get("user")  # use "user" instead of "username"
     if not username:
@@ -222,7 +218,6 @@ def require_admin(request: Request):
 
     return username
 
-
 @app.get("/debug-session")
 def debug_session(request: Request):
     return {"session": dict(request.session)}
@@ -232,7 +227,6 @@ def api_delete_record(record_id: str, admin=Depends(require_admin)):
     if not delete_credit(record_id):
         raise HTTPException(status_code=404, detail="Record not found")
     return {"status": "deleted", "id": record_id}
-
 
 class CreditUpdate(BaseModel):
     Customer: str | None = None
@@ -361,7 +355,6 @@ def do_register(request: Request, username: str = Form(...), password: str = For
     add_user(username, password, "user")
     return templates.TemplateResponse("login.html", {"request": request, "msg": f"User {username} created. Please login."})
 
-
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
     user = request.session.get("user")
@@ -369,7 +362,6 @@ def dashboard(request: Request):
         return RedirectResponse(url="/login")
     role = get_user_role(user)
     return templates.TemplateResponse("dashboard.html", {"request": request, "user": user, "role": role})
-
 
 # ---------- API endpoints (JSON) ----------
 @app.get("/api/customers")
@@ -526,4 +518,4 @@ if __name__ == "__main__":
     ensure_file(CREDITS_FILE, FIELDNAMES)
     ensure_purchase_file()
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=True)
