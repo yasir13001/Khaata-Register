@@ -23,7 +23,7 @@
     <div><strong>Khaata</strong> — Welcome {{ user }} ({{ role }})</div>
     <div>
       <button onclick="location.href='/logout'">Logout</button>
-      <button onclick="location.href='/register'">Register</button>
+      
     </div>
   </header>
 
@@ -35,6 +35,13 @@
       <hr>
       <h4>Purchases</h4>
       <button class="btn" onclick="showPurchases()">Show Purchases</button>
+      {% if role == "admin" %}
+      <hr>
+      <h4>User Management</h4>
+      <button class="btn" onclick="loadUsers()">Manage Users</button>
+      <ul id="user-list" style="list-style:none;padding:0;margin:2"></ul>
+      <button class= "btn" onclick="location.href='/register'">Register</button>
+      {% endif %}
     </div>
 
     <div class="main">
@@ -64,6 +71,11 @@
           <div class="form-row"><label>Items</label><input id="purchase-items"></div>
           
           <button class="btn" onclick="addPurchase()">Add Purchase</button>
+
+
+
+
+
         </div>
       </div>
 
@@ -420,6 +432,54 @@ async function downloadCSV(){
   a.href = url; a.download = "credits_export.csv"; a.click();
   URL.revokeObjectURL(url);
 }
+
+
+async function loadUsers() {
+    const res = await fetch("/api/users", {
+        credentials: "include"  // <-- send session cookie
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        alert("Error loading users: " + res.status + "\n" + text);
+        return;
+    }
+
+    const data = await res.json();
+
+    const ul = document.getElementById("user-list");
+    ul.innerHTML = "";
+
+    data.users.forEach(u => {
+        const li = document.createElement("li");
+        li.style.padding = "6px";
+
+        li.innerHTML = `
+            ${u.username} (${u.role})
+            <button onclick="deleteUser('${u.username}')" style="background:#d9534f;color:white;margin-left:10px">Delete</button>
+        `;
+
+        ul.appendChild(li);
+    });
+}
+
+
+async function deleteUser(username) {
+    if (!confirm("Delete user '" + username + "'?")) return;
+
+    let res = await fetch("/api/delete_user/" + username, { method: "DELETE" , credentials:"include"});
+
+    if (!res.ok) {
+        let err = await res.json();
+        alert("Error: " + err.detail);
+        return;
+    }
+
+    alert("User deleted.");
+    loadUsers();
+}
+
+
 document.getElementById("credit-customer").addEventListener("input", onTypingCustomer);
 document.getElementById("pay-customer").addEventListener("input", onTypingCustomer);
 document.getElementById("purchase-customer").addEventListener("input", onTypingCustomer);

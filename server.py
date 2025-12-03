@@ -74,6 +74,66 @@ def get_user_role(username: str):
                 return r["role"]
     return None
 
+
+import csv
+import os
+
+USERS_FILE = "users.csv"   # adjust if your file name is different
+
+
+def read_users():
+    ensure_user_file()
+    with open(USER_FILE, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+def write_users(rows):
+    with open(USER_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["username", "password_hash", "role"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+def require_login(request: Request):
+    username = request.session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    return username
+def require_admin(username: str = Depends(require_login)):
+    role = get_user_role(username)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return username
+
+
+@app.get("/api/users")
+def api_get_users():
+    users = read_users()
+    return {"users": users}
+
+def delete_user(username: str):
+    users = read_users()
+    before = len(users)
+
+    # Check if user exists
+    found = next((u for u in users if u["username"] == username), None)
+    if not found:
+        return False, "User not found"
+
+    # Prevent deleting last admin
+    admins = [u for u in users if u["role"] == "admin"]
+    if found["role"] == "admin" and len(admins) == 1:
+        return False, "Cannot delete the last admin"
+
+    updated = [u for u in users if u["username"] != username]
+    write_users(updated)
+    return True, "User deleted"
+
+@app.delete("/api/delete_user/{username}")
+def api_delete_user(username: str):
+    success, msg = delete_user(username)
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "ok", "message": msg}
+
 # ---------- Helpers: Credits and Purchases ----------
 def ensure_file(filename, fieldnames):
     if not os.path.exists(filename):
@@ -579,8 +639,6 @@ else:
         "log_level": "info",
         "access_log": True
     }
-
-
 # ---------- Startup ----------
 if __name__ == "__main__":
     ensure_user_file()
