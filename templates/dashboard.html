@@ -16,6 +16,18 @@
     th,td{padding:6px;border-bottom:1px solid #eee;text-align:left}
     .form-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
     label{min-width:80px}
+    /* in your CSS */
+    .action-btn {
+      margin: 0 6px;  /* horizontal spacing */
+    }
+    td button.btn {
+      display: inline-block;
+      margin-right: 8px;
+    }
+    td button.btn:last-child {
+      margin-right: 0;
+    }
+
   </style>
 </head>
 <body>
@@ -172,24 +184,26 @@ async function loadRecords(showAll=false) {
     });
 
     if (isAdmin) {
-      const tdActions = document.createElement("td");
+        const tdActions = document.createElement("td");
 
-      const btnEdit = document.createElement("button");
-      btnEdit.textContent = "Edit";
-      btnEdit.className = "btn";
-      btnEdit.style.marginRight = "4px";
-      btnEdit.onclick = () => editRecord(r.ID);
+        // Use inline-block buttons with margin instead of flex
+        const btnEdit = document.createElement("button");
+        btnEdit.textContent = "Edit";
+        btnEdit.className = "btn";
+        btnEdit.style.display = "inline-block";
+        btnEdit.style.marginRight = "8px"; // spacing to next button
+        btnEdit.onclick = () => editRecord(r.ID);
 
-      const btnDelete = document.createElement("button");
-      btnDelete.textContent = "Delete";
-      btnDelete.className = "btn";
-      btnDelete.onclick = () => deleteRecord(r.ID);
+        const btnDelete = document.createElement("button");
+        btnDelete.textContent = "Delete";
+        btnDelete.className = "btn";
+        btnDelete.style.display = "inline-block";
+        btnDelete.onclick = () => deleteRecord(r.ID);
 
-      tdActions.appendChild(btnEdit);
-      tdActions.appendChild(btnDelete);
-      tr.appendChild(tdActions);
-    }
-
+        tdActions.appendChild(btnEdit);
+        tdActions.appendChild(btnDelete);
+        tr.appendChild(tdActions);
+      }
     tbody.appendChild(tr);
   });
 }

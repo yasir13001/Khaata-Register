@@ -645,5 +645,7 @@ if __name__ == "__main__":
     ensure_file(CREDITS_FILE, FIELDNAMES)
     ensure_purchase_file()
     import uvicorn
-    # uvicorn.run(app,host=cfg.get("host", "0.0.0.0"),port=cfg.get("port", 8080),log_level=cfg.get("log_level", "info"),access_log=cfg.get("access_log", True))
-    uvicorn.run("server:app",host="192.168.192.1", port=8080, reload=True , log_level="info",access_log=True)
+    # <-----for delivery mode --------->
+    uvicorn.run(app,host=cfg.get("host", "0.0.0.0"),port=cfg.get("port", 8080),log_level=cfg.get("log_level", "info"),access_log=cfg.get("access_log", True))
+    # <------for development mode-------->
+    # uvicorn.run("server:app",host="192.168.192.1", port=8080, reload=True , log_level="info",access_log=True)
