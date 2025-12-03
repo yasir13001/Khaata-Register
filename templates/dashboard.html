@@ -74,6 +74,9 @@
         <button class="btn" onclick="loadRecords()">Search</button>
         <button class="btn" onclick="loadRecords(true)">Show All</button>
         <button class="btn" onclick="downloadCSV()">Export CSV</button>
+        <button class="btn" onclick="openDailyReport()">Daily Report</button>
+
+
       </div>
 
       <div style="overflow:auto;height:50vh">
@@ -254,6 +257,9 @@ async function filterCustomerList() {
         });
 }
 
+function openDailyReport() {
+    window.location.href = "/daily-report";
+}
 
 function showPurchases() {
     const { protocol, host } = window.location; // host includes hostname:port

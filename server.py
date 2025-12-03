@@ -512,10 +512,80 @@ def api_download_credits(request: Request):
     writer.writerows(rows)
     return Response(content=output.getvalue(), media_type="text/csv")
 
+@app.get("/daily-report")
+def daily_report_page(request: Request, admin=Depends(require_admin)):
+    return templates.TemplateResponse("daily_report.html", {"request": request})
+
+@app.get("/api/daily_report")
+def api_daily_report(date: str, admin=Depends(require_admin)):
+    """Returns daily credit/payment summary."""
+    records = read_credits()
+
+    # Filter by date (YYYY-MM-DD)
+    daily_rows = [r for r in records if r["Date"] == date]
+
+    total_credit = 0
+    total_payment = 0
+
+    summary = {}  # customer → {credit, payment}
+
+    for r in daily_rows:
+        credit = float(r["Credit"] or 0)
+        payment = float(r["Payment"] or 0)
+
+        total_credit += credit
+        total_payment += payment
+
+        cust = r["Customer"]
+        if cust not in summary:
+            summary[cust] = {"credit": 0, "payment": 0}
+
+        summary[cust]["credit"] += credit
+        summary[cust]["payment"] += payment
+
+    # Prepare final report
+    report = {
+        "date": date,
+        "total_credit": total_credit,
+        "total_payment": total_payment,
+        "net_change": total_credit - total_payment,
+        "per_customer": summary,
+        "records": daily_rows
+    }
+
+    return report
+
+
+import json
+import sys
+import uvicorn
+from pathlib import Path
+
+# Redirect stdout/stderr to log file
+log_file = open("server.log", "a", buffering=1)
+sys.stdout = log_file
+sys.stderr = log_file
+
+# Load configuration
+config_path = Path("config.json")
+if config_path.exists():
+    with open(config_path, "r") as f:
+        cfg = json.load(f)
+else:
+    # Defaults if config.json is missing
+    cfg = {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "log_level": "info",
+        "access_log": True
+    }
+
+
 # ---------- Startup ----------
 if __name__ == "__main__":
     ensure_user_file()
     ensure_file(CREDITS_FILE, FIELDNAMES)
     ensure_purchase_file()
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=True)
+    # uvicorn.run(app,host=cfg.get("host", "0.0.0.0"),port=cfg.get("port", 8080),log_level=cfg.get("log_level", "info"),access_log=cfg.get("access_log", True))
+    uvicorn.run("server:app",host="192.168.192.1", port=8080, reload=True , log_level="info",access_log=True)

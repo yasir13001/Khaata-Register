@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Daily Report</title>
+    <style>
+        body {
+            font-family: Segoe UI, Arial;
+            padding: 20px;
+            background: #f4f6fb;
+        }
+
+        .card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h2, h3 {
+            margin-top: 0;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            border-bottom: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        th {
+            background: #007acc;
+            color: white;
+        }
+
+        .btn {
+            background: #007acc;
+            border: none;
+            padding: 8px 12px;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .date-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        /* Beautified date input */
+        input[type="date"] {
+            padding: 8px;
+            font-size: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Daily Report</h2>
+
+<div class="card">
+
+    <div class="date-box">
+        <label style="font-weight:bold;">Select Date:</label>
+        <input type="date" id="reportDate" onchange="formatDisplayDate()">
+        <span id="displayDate" style="font-weight:bold; font-size:15px; color:#444"></span>
+        <button class="btn" onclick="loadReport()">Load</button>
+    </div>
+
+</div>
+
+<div class="card" id="summary"></div>
+
+<div class="card">
+    <h3>Records</h3>
+    <table id="recordsTable"></table>
+</div>
+
+<script>
+function formatDisplayDate() {
+    let d = document.getElementById("reportDate").value;
+    if (!d) {
+        document.getElementById("displayDate").textContent = "";
+        return;
+    }
+
+    // Convert YYYY-MM-DD → DD-MM-YYYY
+    const [y, m, day] = d.split("-");
+    document.getElementById("displayDate").textContent = `${day}-${m}-${y}`;
+}
+
+async function loadReport() {
+    let date = document.getElementById("reportDate").value;
+    if (!date) { alert("Please select a date."); return; }
+
+    let res = await fetch("/api/daily_report?date=" + date);
+    let data = await res.json();
+
+    // Convert for display
+    const [y, m, d] = data.date.split("-");
+    let displayDate = `${d}-${m}-${y}`;
+
+    let html = `
+        <h3>Summary for ${displayDate}</h3>
+        <p><b>Total Credit:</b> ${data.total_credit}</p>
+        <p><b>Total Payment:</b> ${data.total_payment}</p>
+        <p><b>Net Change:</b> ${data.net_change}</p>
+
+        <h3>Per Customer</h3>
+        <table>
+            <tr><th>Customer</th><th>Credit</th><th>Payment</th><th>Net</th></tr>
+    `;
+
+    for (let cust in data.per_customer) {
+        let c = data.per_customer[cust];
+        html += `
+        <tr>
+            <td>${cust}</td>
+            <td>${c.credit}</td>
+            <td>${c.payment}</td>
+            <td>${c.credit - c.payment}</td>
+        </tr>`;
+    }
+
+    html += "</table>";
+    document.getElementById("summary").innerHTML = html;
+
+    let rows = data.records.map(r => `
+        <tr>
+            <td>${r.ID}</td>
+            <td>${convertDate(r.Date)}</td>
+            <td>${r.Time}</td>
+            <td>${r.Customer}</td>
+            <td>${r.Description}</td>
+            <td>${r.Credit}</td>
+            <td>${r.Payment}</td>
+            <td>${r.Balance}</td>
+        </tr>
+    `).join("");
+
+    document.getElementById("recordsTable").innerHTML =
+        `<tr><th>ID</th><th>Date</th><th>Time</th><th>Customer</th><th>Description</th><th>Credit</th><th>Payment</th><th>Balance</th></tr>` +
+        rows;
+}
+
+// Convert YYYY-MM-DD → DD-MM-YYYY for table
+function convertDate(dateStr) {
+    const [y, m, d] = dateStr.split("-");
+    return `${d}-${m}-${y}`;
+}
+</script>
+
+</body>
+</html>
