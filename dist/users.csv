@@ -1,3 +1,6 @@
 username,password_hash,role
 admin,$2b$12$YROsBzojm7BaGHpaf81ILeRUoTLDx4PrtRHzsd.EnRSWc9rPhJR1i,admin
-ali,$2b$12$TfVLfMpHvvzCuoLCs129su7Y4HItx/UXNPk2AurK0u4J7rl3H8f1i,user
+naseer,$2b$12$fU0H0N.tlu5a1KBoLwU4JeLya/UZZQjzwJYhOlg2VnmLVFo3FHGM2,user
+ali,$2b$12$9iP5Oi4uksr4HJR6wkX.ZuRHz097xGaS.yBIFTPF1EEVLFCajPtF.,user
+javed,$2b$12$ARUDTIwqZpWnOcrWS.Cfl.lTcCSTzs4nhcHECF56rjhqbKa1Tra3i,user
+adnan,$2b$12$BkGFMrVl719kcxZ08Xabg.ZvpBltF48xY23XTwo3pM7M5DxMhhc.2,user

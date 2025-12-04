@@ -13,10 +13,15 @@ from collections import defaultdict
 import uuid
 from pydantic import BaseModel
 import secrets
+import socket
+import json
+import sys
+import uvicorn
+from pathlib import Path
 secrets.token_hex(32)
 
-app = FastAPI()
 
+app = FastAPI()
 
 # Add this middleware
 app.add_middleware(SessionMiddleware, secret_key=secrets)
@@ -46,11 +51,6 @@ def ensure_user_file():
             hashed = bcrypt.hashpw("admin".encode(), bcrypt.gensalt()).decode()
             writer.writerow(["admin", hashed, "admin"])
 
-def add_user(username: str, password: str, role: str = "user"):
-    ensure_user_file()
-    with open(USER_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow([username, bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(), role])
 
 def authenticate_user(username: str, password: str):
     ensure_user_file()
@@ -74,13 +74,6 @@ def get_user_role(username: str):
                 return r["role"]
     return None
 
-
-import csv
-import os
-
-USERS_FILE = "users.csv"   # adjust if your file name is different
-
-
 def read_users():
     ensure_user_file()
     with open(USER_FILE, newline="", encoding="utf-8") as f:
@@ -102,7 +95,6 @@ def require_admin(username: str = Depends(require_login)):
     if role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return username
-
 
 @app.get("/api/users")
 def api_get_users():
@@ -396,6 +388,31 @@ def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login")
 
+def user_exists(username: str):
+    ensure_user_file()
+    with open(USER_FILE, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            if r["username"].lower() == username.lower():
+                return True
+    return False
+
+
+def add_user(username: str, password: str, role: str = "user"):
+    if user_exists(username):
+        return False  # user already exists
+    
+    ensure_user_file()
+    with open(USER_FILE, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            username,
+            bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
+            role
+        ])
+    return True
+
+
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
     # only admin can access registration page if users exist; otherwise allow first-time admin creation
@@ -406,14 +423,31 @@ def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request, "msg": ""})
 
 @app.post("/register")
-def do_register(request: Request, username: str = Form(...), password: str = Form(...)):
-    # only admin may create users if USER_FILE exists
+def do_register(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    # Only admin may create users if USER_FILE exists
     if os.path.exists(USER_FILE):
         user = request.session.get("user")
         if not user or get_user_role(user) != "admin":
-            return templates.TemplateResponse("login.html", {"request": request, "msg": "Access denied"})
-    add_user(username, password, "user")
-    return templates.TemplateResponse("login.html", {"request": request, "msg": f"User {username} created. Please login."})
+            return templates.TemplateResponse("login.html", {
+                "request": request,
+                "msg": "Access denied"
+            })
+
+    # Try to add user
+    if not add_user(username, password, "user"):
+        return templates.TemplateResponse("register.html", {
+            "request": request,
+            "msg": f"User '{username}' already exists!"
+        })
+
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "msg": f"User {username} created. Please login."
+    })
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
@@ -615,37 +649,69 @@ def api_daily_report(date: str, admin=Depends(require_admin)):
 
     return report
 
+def get_local_ip():
+    """Return the LAN IPv4 address of this machine."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # Connect to a non-routable address; this forces system to select default interface
+        s.connect(("10.255.255.255", 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = "127.0.0.1"
+    finally:
+        s.close()
+    return IP
 
-import json
-import sys
-import uvicorn
-from pathlib import Path
+def load_config():
+    config_path = Path("config.json")
 
-# Redirect stdout/stderr to log file
-log_file = open("server.log", "a", buffering=1)
-sys.stdout = log_file
-sys.stderr = log_file
-
-# Load configuration
-config_path = Path("config.json")
-if config_path.exists():
-    with open(config_path, "r") as f:
-        cfg = json.load(f)
-else:
-    # Defaults if config.json is missing
+    # Default config
     cfg = {
         "host": "0.0.0.0",
         "port": 8080,
         "log_level": "info",
         "access_log": True
     }
+
+    # Load existing config if found
+    if config_path.exists():
+        with open(config_path, "r") as f:
+            file_cfg = json.load(f)
+            cfg.update(file_cfg)  # merge with defaults
+
+    # If host is "auto", replace with actual IP
+    if cfg.get("host") == "auto":
+        cfg["host"] = get_local_ip()
+
+    return cfg
+
+log_file = open("server.log", "a", buffering=1)
+sys.stdout = log_file
+sys.stderr = log_file
 # ---------- Startup ----------
 if __name__ == "__main__":
     ensure_user_file()
     ensure_file(CREDITS_FILE, FIELDNAMES)
     ensure_purchase_file()
-    import uvicorn
     # <-----for delivery mode --------->
-    uvicorn.run(app,host=cfg.get("host", "0.0.0.0"),port=cfg.get("port", 8080),log_level=cfg.get("log_level", "info"),access_log=cfg.get("access_log", True))
+    # uvicorn.run(app,host=cfg.get("host", "0.0.0.0"),port=cfg.get("port", 8080),log_level=cfg.get("log_level", "info"),access_log=cfg.get("access_log", True))
+    
     # <------for development mode-------->
-    # uvicorn.run("server:app",host="192.168.192.1", port=8080, reload=True , log_level="info",access_log=True)
+    # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
+    # uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    
+
+# for delivery mode
+# To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
+    cfg = load_config()
+    uvicorn.run(
+        app,
+        host=cfg["host"],
+        port=cfg["port"],
+        log_level=cfg["log_level"],
+        access_log=cfg["access_log"],
+        workers = 1,
+    )
+
+
+
