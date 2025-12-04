@@ -1,0 +1,6 @@
+{
+  "host": "192.168.10.6",
+  "port": 8080,
+  "log_level": "info",
+  "access_log": true
+}
