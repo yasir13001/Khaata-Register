@@ -18,83 +18,403 @@ import json
 import sys
 import uvicorn
 from pathlib import Path
+import sqlite3
+
 secrets.token_hex(32)
 
 
 app = FastAPI()
 
-# Add this middleware
+
+
 app.add_middleware(SessionMiddleware, secret_key=secrets)
 
-# ---------- Config ----------
-USER_FILE = "users.csv"
-CREDITS_FILE = "credits.csv"
-PURCHASES_FILE = "purchases.csv"
-
-FIELDNAMES = ["ID", "Date", "Time", "Customer", "Description", "Credit", "Payment", "Balance", "Owner"]
-PURCHASE_FIELDS = ["ID", "Date", "Time", "Customer", "Items", "Amount", "Owner"]
 DATE_FORMAT = "%Y-%m-%d"
 
-# Serve templates/static (create these folders)
+# ----- Serve templates/static (create these folders)
 templates = Jinja2Templates(directory="templates")
 if not os.path.exists("static"):
     os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ---------- Helpers: Users ----------
-def ensure_user_file():
-    if not os.path.exists(USER_FILE):
-        with open(USER_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["username", "password_hash", "role"])
-            # create default admin with password "admin" (change after first login)
-            hashed = bcrypt.hashpw("admin".encode(), bcrypt.gensalt()).decode()
-            writer.writerow(["admin", hashed, "admin"])
+#-----Database config --------
+@app.on_event("startup")
+def startup_event():
+    init_db()# Add this middleware
 
+DB_FILE = "app.db"
 
-def authenticate_user(username: str, password: str):
-    ensure_user_file()
-    with open(USER_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            if r["username"] == username:
-                if bcrypt.checkpw(password.encode(), r["password_hash"].encode()):
-                    return r["role"]
-                else:
-                    return None
-    return None
+def get_db_connection():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row  # enables row["ID"]
+    return conn
+
+def init_db():
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute("""CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL
+    )""")
+    
+    c.execute("""CREATE TABLE IF NOT EXISTS credits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,
+        time TEXT,
+        customer TEXT,
+        description TEXT,
+        credit REAL DEFAULT 0,
+        payment REAL DEFAULT 0,
+        balance REAL DEFAULT 0,
+        owner TEXT
+    )""")
+    
+    c.execute("""CREATE TABLE IF NOT EXISTS purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,
+        time TEXT,
+        customer TEXT,
+        items TEXT,
+        amount REAL,
+        owner TEXT
+    )""")
+    
+    # Create default admin if none exists
+    c.execute("SELECT COUNT(*) FROM users")
+    if c.fetchone()[0] == 0:
+        import bcrypt
+        hashed = bcrypt.hashpw(b"admin", bcrypt.gensalt()).decode()
+        c.execute("INSERT INTO users(username, password_hash, role) VALUES (?,?,?)",
+                  ("admin", hashed, "admin"))
+    conn.commit()
+    conn.close()
+
+def ensure_credits_table():
+    conn = get_db_connection()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS credits (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Date TEXT NOT NULL,
+            Time TEXT NOT NULL,
+            Customer TEXT NOT NULL,
+            Description TEXT,
+            Credit TEXT DEFAULT '0',
+            Payment TEXT DEFAULT '0',
+            Balance TEXT DEFAULT '0',
+            Owner TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def add_user(username: str, password: str, role: str = "user"):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM users WHERE username=?", (username,))
+    if c.fetchone():
+        conn.close()
+        return False
+    import bcrypt
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    c.execute("INSERT INTO users(username,password_hash,role) VALUES(?,?,?)", (username, hashed, role))
+    conn.commit()
+    conn.close()
+    return True
 
 def get_user_role(username: str):
-    if not os.path.exists(USER_FILE):
-        return None
-    with open(USER_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            if r["username"] == username:
-                return r["role"]
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.execute("SELECT role FROM users WHERE username = ?", (username,))
+    row = cur.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+def authenticate_user(username: str, password: str):
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.execute("SELECT password_hash, role FROM users WHERE username = ?", (username,))
+    row = cur.fetchone()
+    conn.close()
+    if row and bcrypt.checkpw(password.encode(), row[0].encode()):
+        return row[1]
     return None
 
-def read_users():
-    ensure_user_file()
-    with open(USER_FILE, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+def delete_user(username: str):
+    conn = get_db_connection()
+    c = conn.cursor()
+    # Prevent deleting last admin
+    if get_user_role(username) == "admin":
+        c.execute("SELECT COUNT(*) FROM users WHERE role='admin'")
+        if c.fetchone()[0] <= 1:
+            conn.close()
+            return False, "Cannot delete the last admin"
+    c.execute("DELETE FROM users WHERE username=?", (username,))
+    conn.commit()
+    conn.close()
+    return True, "User deleted"
 
-def write_users(rows):
-    with open(USER_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["username", "password_hash", "role"])
-        writer.writeheader()
-        writer.writerows(rows)
+def add_credit(customer, amount, description, owner):
+    conn = get_db_connection()
+    c = conn.cursor()
+    from datetime import datetime
+    now = datetime.now()
+    date, time = now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S")
+    
+    # Compute balance
+    c.execute("SELECT SUM(credit)-SUM(payment) FROM credits WHERE customer=?", (customer,))
+    prev_balance = c.fetchone()[0] or 0
+    new_balance = prev_balance + amount
+    
+    c.execute("""INSERT INTO credits(date,time,customer,description,credit,payment,balance,owner)
+                 VALUES(?,?,?,?,?,?,?,?)""",
+              (date,time,customer,description,amount,0,new_balance,owner))
+    conn.commit()
+    conn.close()
+def read_users():
+    conn = get_db_connection()
+    users = conn.execute("SELECT username, role FROM users").fetchall()
+    conn.close()
+    return [dict(u) for u in users]
+
+def users_exist() -> bool:
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.execute("SELECT COUNT(*) FROM users")
+    count = cur.fetchone()[0]
+    conn.close()
+    return count > 0
+
+def read_credits():
+    ensure_credits_table()  # make sure table exists
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM credits")
+    rows = cur.fetchall()
+    conn.close()
+    # Convert sqlite3.Row to dict
+    return [dict(r) for r in rows]
+
+
+def add_user(username: str, password: str, role: str = "user") -> bool:
+    if get_user_role(username):  # already exists
+        return False
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute(
+        "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+        (username, bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(), role)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def authenticate_user(username, password):
+    conn = get_db_connection()
+    row = conn.execute("SELECT password_hash, role FROM users WHERE username=?", (username,)).fetchone()
+    conn.close()
+    if row and bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+        return row["role"]
+    return None
+
+def get_user_role(username):
+    conn = get_db_connection()
+    row = conn.execute("SELECT role FROM users WHERE username=?", (username,)).fetchone()
+    conn.close()
+    return row["role"] if row else None
+
+def delete_user(username):
+    conn = get_db_connection()
+    row = conn.execute("SELECT role FROM users WHERE username=?", (username,)).fetchone()
+    if not row:
+        conn.close()
+        return False, "User not found"
+    
+    # prevent deleting last admin
+    if row["role"] == "admin":
+        admins = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+        if admins <= 1:
+            conn.close()
+            return False, "Cannot delete last admin"
+
+    conn.execute("DELETE FROM users WHERE username=?", (username,))
+    conn.commit()
+    conn.close()
+    return True, "User deleted"
+
+
+# ---------- Config ----------
 
 def require_login(request: Request):
     username = request.session.get("username")
     if not username:
         raise HTTPException(status_code=401, detail="Not logged in")
     return username
+
 def require_admin(username: str = Depends(require_login)):
     role = get_user_role(username)
     if role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return username
+
+
+# ---------- Helpers: Credits and Purchases ----------
+def row_to_dict(r):
+    return {
+        "ID": r["id"],
+        "Date": r["date"],
+        "Time": r["time"],
+        "Customer": r["customer"],
+        "Description": r["description"],
+        "Credit": str(r["credit"]),
+        "Payment": str(r["payment"]),
+        "Balance": str(r["balance"]),
+        "Owner": r["owner"]
+    }
+def read_credits(owner: str | None = None):
+    conn = get_db_connection()
+    if owner:
+        cur = conn.execute("SELECT * FROM credits WHERE Owner = ?", (owner,))
+    else:
+        cur = conn.execute("SELECT * FROM credits")
+    rows = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return [row_to_dict(r) for r in rows]
+
+def write_credit(record):
+    conn = get_db_connection()
+    conn.execute("""
+        INSERT INTO credits (date, time, customer, description, credit, payment, balance, owner)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        record["Date"], record["Time"], record["Customer"], record["Description"],
+        float(record.get("Credit", 0)), float(record.get("Payment", 0)),
+        float(record.get("Balance", 0)), record["Owner"]
+    ))
+    conn.commit()
+    conn.close()
+
+def edit_credit(record_id: int, updates: dict):
+    # Only allow updating Customer, Description, Credit, Payment
+    allowed = {"Customer", "Description", "Credit", "Payment"}
+    set_clause = ", ".join([f"{k} = ?" for k in updates if k in allowed])
+    values = [str(updates[k]) for k in updates if k in allowed]
+    
+    if not set_clause:
+        return False
+
+    conn = get_db_connection()
+    conn.execute(f"UPDATE credits SET {set_clause} WHERE ID = ?", (*values, record_id))
+    conn.commit()
+    conn.close()
+
+    # Recompute all balances for the affected customer
+    customer = updates.get("Customer")
+    if customer:
+        recompute_balances(customer)
+
+    return True
+
+def recompute_balances(customer: str):
+    conn = get_db_connection()
+    cur = conn.execute("SELECT * FROM credits WHERE Customer = ? ORDER BY ID ASC", (customer,))
+    rows = cur.fetchall()
+    balance = Decimal("0")
+    for row in rows:
+        balance += Decimal(row["Credit"]) - Decimal(row["Payment"])
+        conn.execute("UPDATE credits SET Balance = ? WHERE ID = ?", (str(balance), row["ID"]))
+    conn.commit()
+    conn.close()
+
+def delete_credit(record_id: int):
+    conn = get_db_connection()
+    conn.execute("DELETE FROM credits WHERE ID = ?", (record_id,))
+    conn.commit()
+    conn.close()
+
+def add_credit(customer: str, amount: Decimal, description: str, owner: str):
+    balance = compute_balance(customer) + amount
+    now = datetime.now()
+    conn = get_db_connection()
+    conn.execute("""
+        INSERT INTO credits (Date, Time, Customer, Description, Credit, Payment, Balance, Owner)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        now.strftime(DATE_FORMAT),
+        now.strftime("%H:%M:%S"),
+        customer,
+        description,
+        str(amount),
+        "0",
+        str(balance),
+        owner
+    ))
+    conn.commit()
+    conn.close()
+
+def compute_balance(customer_name: str) -> Decimal:
+    conn = get_db_connection()
+    cur = conn.execute("SELECT Credit, Payment FROM credits WHERE Customer = ?", (customer_name,))
+    total = Decimal("0")
+    for row in cur.fetchall():
+        total += Decimal(row["Credit"]) - Decimal(row["Payment"])
+    conn.close()
+    return total
+
+def add_payment(customer: str, amount: Decimal, description: str, owner: str):
+    balance = compute_balance(customer) - amount
+    now = datetime.now()
+    conn = get_db_connection()
+    conn.execute("""
+        INSERT INTO credits (Date, Time, Customer, Description, Credit, Payment, Balance, Owner)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        now.strftime(DATE_FORMAT),
+        now.strftime("%H:%M:%S"),
+        customer,
+        description,
+        "0",
+        str(amount),
+        str(balance),
+        owner
+    ))
+    conn.commit()
+    conn.close()
+
+# ------Purchases -------
+def read_purchases():
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM purchases").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def write_purchase(record):
+    conn = get_db_connection()
+    conn.execute("""
+        INSERT INTO purchases (date, time, customer, items, amount, owner)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        record["Date"], record["Time"], record["Customer"], record["Items"],
+        float(record["Amount"]), record["Owner"]
+    ))
+    conn.commit()
+    conn.close()
+
+    
+def delete_credit(record_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Check if record exists
+    cur.execute("SELECT * FROM credits WHERE ID = ?", (record_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return False  # record not found
+
+    # Delete the record
+    cur.execute("DELETE FROM credits WHERE ID = ?", (record_id,))
+    conn.commit()
+    conn.close()
+    return True
 
 @app.get("/api/users")
 def api_get_users():
@@ -116,7 +436,7 @@ def delete_user(username: str):
         return False, "Cannot delete the last admin"
 
     updated = [u for u in users if u["username"] != username]
-    write_users(updated)
+    add_user(updated)
     return True, "User deleted"
 
 @app.delete("/api/delete_user/{username}")
@@ -125,137 +445,6 @@ def api_delete_user(username: str):
     if not success:
         raise HTTPException(status_code=400, detail=msg)
     return {"status": "ok", "message": msg}
-
-# ---------- Helpers: Credits and Purchases ----------
-def ensure_file(filename, fieldnames):
-    if not os.path.exists(filename):
-        with open(filename, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-
-def read_credits():
-    ensure_file(CREDITS_FILE, FIELDNAMES)
-    with open(CREDITS_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-        # normalize missing Owner
-        for r in rows:
-            if "Owner" not in r:
-                r["Owner"] = ""
-        return rows
-
-def write_credit(record):
-    ensure_file(CREDITS_FILE, FIELDNAMES)
-    with open(CREDITS_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writerow(record)
-
-def edit_credit(record_id: str, updates: dict):
-    records = read_credits()
-    updated = False
-
-    # Update the target record
-    for r in records:
-        if r["ID"] == record_id:
-            for k, v in updates.items():
-                if k in FIELDNAMES:
-                    r[k] = v
-            updated = True
-            break
-
-    if not updated:
-        return False
-
-    # Sort records by ID (numerical) to maintain chronological order
-    records.sort(key=lambda x: int(x["ID"]))
-
-    # Recalculate balances per customer
-    balances = {}  # customer -> current balance
-    for r in records:
-        customer = r.get("Customer", "")
-        if customer not in balances:
-            balances[customer] = 0
-        credit = int(r.get("Credit") or 0)
-        payment = int(r.get("Payment") or 0)
-        balances[customer] += credit - payment
-        r["Balance"] = str(balances[customer])  # keep as string, no float
-
-    # Rewrite CSV
-    with open(CREDITS_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(records)
-
-    return True
-
-def next_credit_id():
-    if not os.path.exists(CREDITS_FILE):
-        return "1"
-    with open(CREDITS_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        ids = [int(r["ID"]) for r in reader if r.get("ID") and r["ID"].isdigit()]
-        return str(max(ids) + 1) if ids else "1"
-
-def compute_balance(customer_name):
-    total = Decimal("0")
-    for r in read_credits():
-        if r.get("Customer") == customer_name:
-            try:
-                total += Decimal(r.get("Credit","0")) - Decimal(r.get("Payment","0"))
-            except InvalidOperation:
-                continue
-    return total
-
-# Purchases
-def ensure_purchase_file():
-    ensure_file(PURCHASES_FILE, PURCHASE_FIELDS)
-
-def read_purchases():
-    ensure_purchase_file()
-    with open(PURCHASES_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        return list(reader)
-
-def write_purchase(record):
-    ensure_purchase_file()
-    with open(PURCHASES_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=PURCHASE_FIELDS)
-        writer.writerow(record)
-
-def next_purchase_id():
-    if not os.path.exists(PURCHASES_FILE):
-        return "1"
-    with open(PURCHASES_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        ids = [int(r["ID"]) for r in reader if r.get("ID") and r["ID"].isdigit()]
-        return str(max(ids)+1) if ids else "1"
-    
-def delete_credit(record_id: str):
-    records = read_credits()
-    new_records = [r for r in records if r["ID"] != record_id]
-
-    if len(records) == len(new_records):
-        return False  # not found
-
-    # Recalculate balances per customer
-    customer_balances = {}
-    for r in new_records:
-        cust = r["Customer"]
-        credit = float(r.get("Credit") or 0)
-        payment = float(r.get("Payment") or 0)
-        prev_balance = customer_balances.get(cust, 0)
-        new_balance = prev_balance + credit - payment
-        r["Balance"] = str(new_balance)  # store as string for CSV
-        customer_balances[cust] = new_balance
-
-    # Rewrite the CSV
-    with open(CREDITS_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(new_records)
-
-    return True
-
 # ---------------------------
 # Admin permission check
 # ---------------------------
@@ -388,39 +577,19 @@ def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login")
 
-def user_exists(username: str):
-    ensure_user_file()
-    with open(USER_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            if r["username"].lower() == username.lower():
-                return True
-    return False
-
-
-def add_user(username: str, password: str, role: str = "user"):
-    if user_exists(username):
-        return False  # user already exists
-    
-    ensure_user_file()
-    with open(USER_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            username,
-            bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
-            role
-        ])
-    return True
-
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    # only admin can access registration page if users exist; otherwise allow first-time admin creation
-    if os.path.exists(USER_FILE):
+    # Only admin can register if users exist
+    if users_exist():
         user = request.session.get("user")
         if not user or get_user_role(user) != "admin":
-            return templates.TemplateResponse("login.html", {"request": request, "msg": "Only admin can register users."})
+            return templates.TemplateResponse("login.html", {
+                "request": request,
+                "msg": "Only admin can register users."
+            })
     return templates.TemplateResponse("register.html", {"request": request, "msg": ""})
+
 
 @app.post("/register")
 def do_register(
@@ -429,13 +598,11 @@ def do_register(
     password: str = Form(...)
 ):
     # Only admin may create users if USER_FILE exists
-    if os.path.exists(USER_FILE):
-        user = request.session.get("user")
-        if not user or get_user_role(user) != "admin":
-            return templates.TemplateResponse("login.html", {
-                "request": request,
-                "msg": "Access denied"
-            })
+   if users_exist():
+    user = request.session.get("user")
+    if not user or get_user_role(user) != "admin":
+        return templates.TemplateResponse("login.html", {"request": request, "msg": "Access denied"})
+
 
     # Try to add user
     if not add_user(username, password, "user"):
@@ -468,10 +635,14 @@ def api_customers(request: Request):
 def api_credits(request: Request):
     user = require_login(request)
     role = get_user_role(user)
-    rows = read_credits()
+    rows = read_credits()  # this now returns a list of dicts from SQLite
+
+    # If not admin, only show their own records
     if role != "admin":
         rows = [r for r in rows if r.get("Owner") == user]
+
     return {"records": rows}
+
 
 @app.post("/api/add_credit")
 async def api_add_credit(request: Request):
@@ -486,19 +657,9 @@ async def api_add_credit(request: Request):
         amt = Decimal(str(amount))
     except Exception:
         raise HTTPException(status_code=400, detail="invalid amount")
-    rec = {
-        "ID": next_credit_id(),
-        "Date": datetime.now().strftime(DATE_FORMAT),
-        "Time": datetime.now().strftime("%H:%M:%S"),
-        "Customer": customer,
-        "Description": description,
-        "Credit": str(amt),
-        "Payment": "0",
-        "Balance": str((compute_balance(customer) + amt)),
-        "Owner": user
-    }
-    write_credit(rec)
-    return {"ok": True, "record": rec}
+
+    add_credit(customer, amt, description, user)
+    return {"ok": True}
 
 @app.post("/api/add_payment")
 async def api_add_payment(request: Request):
@@ -513,19 +674,10 @@ async def api_add_payment(request: Request):
         amt = Decimal(str(amount))
     except Exception:
         raise HTTPException(status_code=400, detail="invalid amount")
-    rec = {
-        "ID": next_credit_id(),
-        "Date": datetime.now().strftime(DATE_FORMAT),
-        "Time": datetime.now().strftime("%H:%M:%S"),
-        "Customer": customer,
-        "Description": description,
-        "Credit": "0",
-        "Payment": str(amt),
-        "Balance": str((compute_balance(customer) - amt)),
-        "Owner": user
-    }
-    write_credit(rec)
-    return {"ok": True, "record": rec}
+
+    add_payment(customer, amt, description, user)
+    return {"ok": True}
+
 
 @app.get("/api/purchases")
 def api_purchases(request: Request):
@@ -550,7 +702,6 @@ async def api_add_purchase(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="invalid amount")
     rec = {
-        "ID": next_purchase_id(),
         "Date": datetime.now().strftime(DATE_FORMAT),
         "Time": datetime.now().strftime("%H:%M:%S"),
         "Customer": customer,
@@ -690,28 +841,26 @@ sys.stdout = log_file
 sys.stderr = log_file
 # ---------- Startup ----------
 if __name__ == "__main__":
-    ensure_user_file()
-    ensure_file(CREDITS_FILE, FIELDNAMES)
-    ensure_purchase_file()
+
     # <-----for delivery mode --------->
     # uvicorn.run(app,host=cfg.get("host", "0.0.0.0"),port=cfg.get("port", 8080),log_level=cfg.get("log_level", "info"),access_log=cfg.get("access_log", True))
     
     # <------for development mode-------->
     # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    # uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
     
 
 # for delivery mode
 # To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
-    cfg = load_config()
-    uvicorn.run(
-        app,
-        host=cfg["host"],
-        port=cfg["port"],
-        log_level=cfg["log_level"],
-        access_log=cfg["access_log"],
-        workers = 1,
-    )
+    # cfg = load_config()
+    # uvicorn.run(
+    #     app,
+    #     host=cfg["host"],
+    #     port=cfg["port"],
+    #     log_level=cfg["log_level"],
+    #     access_log=cfg["access_log"],
+    #     workers = 1,
+    # )
 
 
 
