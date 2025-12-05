@@ -20,19 +20,23 @@ import uvicorn
 from pathlib import Path
 import sqlite3
 import io
+from contextlib import asynccontextmanager
+
 
 secrets.token_hex(32)
 
-
-app = FastAPI()
-
-
+# <--------Init application------->
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # STARTUP
+    init_db()
+    yield
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(SessionMiddleware, secret_key=secrets)
 
 DATE_FORMAT = "%Y-%m-%d"
 FIELDNAMES = ["ID", "Date", "Time", "Customer", "Description", "Credit", "Payment", "Balance", "Owner"]
-
 
 # ----- Serve templates/static (create these folders)
 templates = Jinja2Templates(directory="templates")
@@ -41,9 +45,6 @@ if not os.path.exists("static"):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 #-----Database config --------
-@app.on_event("startup")
-def startup_event():
-    init_db()# Add this middleware
 
 DB_FILE = "app.db"
 
@@ -182,7 +183,6 @@ def read_credits():
     # Convert sqlite3.Row to dict
     return [dict(r) for r in rows]
 
-
 def add_user(username: str, password: str, role: str = "user") -> bool:
     if get_user_role(username):  # already exists
         return False
@@ -194,7 +194,6 @@ def add_user(username: str, password: str, role: str = "user") -> bool:
     conn.commit()
     conn.close()
     return True
-
 
 def authenticate_user(username, password):
     conn = get_db_connection()
@@ -209,7 +208,6 @@ def get_user_role(username):
     row = conn.execute("SELECT role FROM users WHERE username=?", (username,)).fetchone()
     conn.close()
     return row["role"] if row else None
-
 
 # ---------- Config ----------
 
@@ -371,6 +369,7 @@ def api_get_users():
     users = read_users()
     return {"users": users}
 
+#   < ------delete user ------>
 def delete_user(username: str):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -488,7 +487,6 @@ def read_purchases():
             "Owner": r["owner"]
         })
     return mapped
-
 
 def write_purchase(record):
     conn = get_db_connection()
@@ -639,7 +637,6 @@ def dashboard(request: Request):
     role = get_user_role(user)
     return templates.TemplateResponse("dashboard.html", {"request": request, "user": user, "role": role})
 
-# ---------- API endpoints (JSON) ----------
 @app.get("/api/customers")
 def api_customers(request: Request):
     _ = require_login(request)
@@ -866,20 +863,19 @@ if __name__ == "__main__":
     
     # <------for development mode-------->
     # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True, workers = 4)
+    # uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
     
 
 # for delivery mode
 # To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
-    # cfg = load_config()
-    # uvicorn.run(
-    #     app,
-    #     host=cfg["host"],
-    #     port=cfg["port"],
-    #     log_level=cfg["log_level"],
-    #     access_log=cfg["access_log"],
-    #     workers = 1,
-    # )
+    cfg = load_config()
+    uvicorn.run(
+        app,
+        host=cfg["host"],
+        port=cfg["port"],
+        log_level=cfg["log_level"],
+        access_log=cfg["access_log"],
+    )
 
 
 
