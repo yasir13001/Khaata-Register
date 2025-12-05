@@ -454,20 +454,6 @@ async def api_edit_credit(record_id: str, update: CreditUpdate):
 
     return {"status": "success", "id": record_id, "updates": updates}
 
-@app.get("/reset_admin")
-def reset_admin():
-    import bcrypt
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    hashed = bcrypt.hashpw(b"admin", bcrypt.gensalt()).decode()
-    cur.execute("INSERT OR REPLACE INTO users(username, password_hash, role) VALUES (?, ?, ?)",
-                ("admin", hashed, "admin"))
-
-    conn.commit()
-    conn.close()
-    return {"status": "admin reset", "username": "admin", "password": "admin"}
-
 # < -------Purchases Section ----->
 
 def read_purchases():
