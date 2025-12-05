@@ -19,6 +19,7 @@ import sys
 import uvicorn
 from pathlib import Path
 import sqlite3
+import io
 
 secrets.token_hex(32)
 
@@ -30,6 +31,8 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=secrets)
 
 DATE_FORMAT = "%Y-%m-%d"
+FIELDNAMES = ["ID", "Date", "Time", "Customer", "Description", "Credit", "Payment", "Balance", "Owner"]
+
 
 # ----- Serve templates/static (create these folders)
 templates = Jinja2Templates(directory="templates")
@@ -139,20 +142,6 @@ def authenticate_user(username: str, password: str):
         return row[1]
     return None
 
-def delete_user(username: str):
-    conn = get_db_connection()
-    c = conn.cursor()
-    # Prevent deleting last admin
-    if get_user_role(username) == "admin":
-        c.execute("SELECT COUNT(*) FROM users WHERE role='admin'")
-        if c.fetchone()[0] <= 1:
-            conn.close()
-            return False, "Cannot delete the last admin"
-    c.execute("DELETE FROM users WHERE username=?", (username,))
-    conn.commit()
-    conn.close()
-    return True, "User deleted"
-
 def add_credit(customer, amount, description, owner):
     conn = get_db_connection()
     c = conn.cursor()
@@ -221,25 +210,6 @@ def get_user_role(username):
     conn.close()
     return row["role"] if row else None
 
-def delete_user(username):
-    conn = get_db_connection()
-    row = conn.execute("SELECT role FROM users WHERE username=?", (username,)).fetchone()
-    if not row:
-        conn.close()
-        return False, "User not found"
-    
-    # prevent deleting last admin
-    if row["role"] == "admin":
-        admins = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
-        if admins <= 1:
-            conn.close()
-            return False, "Cannot delete last admin"
-
-    conn.execute("DELETE FROM users WHERE username=?", (username,))
-    conn.commit()
-    conn.close()
-    return True, "User deleted"
-
 
 # ---------- Config ----------
 
@@ -254,7 +224,6 @@ def require_admin(username: str = Depends(require_login)):
     if role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return username
-
 
 # ---------- Helpers: Credits and Purchases ----------
 def row_to_dict(r):
@@ -379,25 +348,6 @@ def add_payment(customer: str, amount: Decimal, description: str, owner: str):
     conn.commit()
     conn.close()
 
-# ------Purchases -------
-def read_purchases():
-    conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM purchases").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-def write_purchase(record):
-    conn = get_db_connection()
-    conn.execute("""
-        INSERT INTO purchases (date, time, customer, items, amount, owner)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        record["Date"], record["Time"], record["Customer"], record["Items"],
-        float(record["Amount"]), record["Owner"]
-    ))
-    conn.commit()
-    conn.close()
-
     
 def delete_credit(record_id: int):
     conn = get_db_connection()
@@ -422,29 +372,47 @@ def api_get_users():
     return {"users": users}
 
 def delete_user(username: str):
-    users = read_users()
-    before = len(users)
+    conn = get_db_connection()
+    cur = conn.cursor()
 
     # Check if user exists
-    found = next((u for u in users if u["username"] == username), None)
-    if not found:
+    user = cur.execute(
+        "SELECT username, role FROM users WHERE username = ?",
+        (username,)
+    ).fetchone()
+
+    if not user:
+        conn.close()
         return False, "User not found"
 
     # Prevent deleting last admin
-    admins = [u for u in users if u["role"] == "admin"]
-    if found["role"] == "admin" and len(admins) == 1:
+    admin_count = cur.execute(
+        "SELECT COUNT(*) FROM users WHERE role = 'admin'"
+    ).fetchone()[0]
+
+    if user["role"] == "admin" and admin_count == 1:
+        conn.close()
         return False, "Cannot delete the last admin"
 
-    updated = [u for u in users if u["username"] != username]
-    add_user(updated)
-    return True, "User deleted"
+    # Delete user
+    else:
+        cur.execute("DELETE FROM users WHERE username = ?", (username,))
+        conn.commit()
+        conn.close()
+        return True, "User deleted"
+
 
 @app.delete("/api/delete_user/{username}")
-def api_delete_user(username: str):
+def api_delete_user(username: str, request: Request):
+    user = require_login(request)
+    role = get_user_role(user)
+    
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Not allowed")
+
     success, msg = delete_user(username)
-    if not success:
-        raise HTTPException(status_code=400, detail=msg)
-    return {"status": "ok", "message": msg}
+    return {"success": success, "message": msg}
+
 # ---------------------------
 # Admin permission check
 # ---------------------------
@@ -486,7 +454,54 @@ async def api_edit_credit(record_id: str, update: CreditUpdate):
         raise HTTPException(status_code=404, detail="Record not found")
 
     return {"status": "success", "id": record_id, "updates": updates}
-    
+
+@app.get("/reset_admin")
+def reset_admin():
+    import bcrypt
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    hashed = bcrypt.hashpw(b"admin", bcrypt.gensalt()).decode()
+    cur.execute("INSERT OR REPLACE INTO users(username, password_hash, role) VALUES (?, ?, ?)",
+                ("admin", hashed, "admin"))
+
+    conn.commit()
+    conn.close()
+    return {"status": "admin reset", "username": "admin", "password": "admin"}
+
+# < -------Purchases Section ----->
+
+def read_purchases():
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM purchases").fetchall()
+    conn.close()
+
+    mapped = []
+    for r in rows:
+        mapped.append({
+            "ID": r["id"],
+            "Date": r["date"],
+            "Time": r["time"],
+            "Customer": r["customer"],
+            "Items": r["items"],
+            "Amount": r["amount"],
+            "Owner": r["owner"]
+        })
+    return mapped
+
+
+def write_purchase(record):
+    conn = get_db_connection()
+    conn.execute("""
+        INSERT INTO purchases (date, time, customer, items, amount, owner)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        record["Date"], record["Time"], record["Customer"], record["Items"],
+        float(record["Amount"]), record["Owner"]
+    ))
+    conn.commit()
+    conn.close() 
+
 @app.get("/purchases", response_class=HTMLResponse)
 async def purchases_page():
     rows = read_purchases()
@@ -746,15 +761,19 @@ def api_balance(request: Request, customer: str):
 def api_download_credits(request: Request):
     user = require_login(request)
     role = get_user_role(user)
-    rows = read_credits()
+    
+    # Fetch credits from SQLite
+    rows = read_credits()  # make sure read_credits() returns list of dicts with keys matching FIELDNAMES
+    
     if role != "admin":
         rows = [r for r in rows if r.get("Owner") == user]
-    # return CSV string
-    import io
+    
+    # Write to CSV in memory
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=FIELDNAMES)
     writer.writeheader()
     writer.writerows(rows)
+    
     return Response(content=output.getvalue(), media_type="text/csv")
 
 @app.get("/daily-report")
@@ -847,7 +866,7 @@ if __name__ == "__main__":
     
     # <------for development mode-------->
     # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True, workers = 4)
     
 
 # for delivery mode
