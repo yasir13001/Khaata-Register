@@ -119,7 +119,15 @@
         <button class="btn" onclick="loadRecords()">Search</button>
         <button class="btn" onclick="loadRecords(true)">Show All</button>
         <button class="btn" onclick="downloadCSV()">Export CSV</button>
+        {% if role == "admin" %}
         <button class="btn" onclick="openDailyReport()">Daily Report</button>
+        {% endif %}
+        {% if role == "admin" %}
+        <a href="/filter">
+          <button class = "btn">Filter Data</button>
+        </a>
+        {% endif %}
+
 
 
       </div>

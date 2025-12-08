@@ -915,6 +915,127 @@ def api_daily_report(date: str, admin=Depends(require_admin)):
 
     return report
 
+@app.get("/filter", response_class=HTMLResponse)
+def filter_page(request: Request):
+    user = require_login(request)
+    return templates.TemplateResponse("filter.html", {"request": request})
+
+@app.post("/api/filter")
+def filter_data(request: Request, data: dict):
+
+    user = require_login(request)
+
+    customer = data.get("customer")
+    date_from = data.get("date_from")
+    date_to = data.get("date_to")
+    balance_min = data.get("balance_min")
+    balance_max = data.get("balance_max")
+    owner = data.get("owner")
+    sql = "SELECT * FROM credits WHERE 1=1"
+    params = []
+
+    if customer:
+        sql += " AND customer LIKE ?"
+        params.append(f"%{customer}%")
+
+    if date_from:
+        sql += " AND date >= ?"
+        params.append(date_from)
+
+    if date_to:
+        sql += " AND date <= ?"
+        params.append(date_to)
+
+    if balance_min:
+        sql += " AND balance >= ?"
+        params.append(balance_min)
+
+    if balance_max:
+        sql += " AND balance <= ?"
+        params.append(balance_max)
+
+    if owner:
+        sql += " AND owner = ?"
+        params.append(owner)
+
+    # Always restrict to logged-in user unless admin
+    if get_user_role(user) != "admin":
+        sql += " AND owner = ?"
+        params.append(user)
+
+    conn = get_db_connection()
+    rows = conn.execute(sql, tuple(params)).fetchall()
+    conn.close()
+
+    return {"results": [dict(r) for r in rows]}
+
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.lib import colors
+from io import BytesIO
+from fastapi.responses import StreamingResponse
+
+@app.post("/api/filter/pdf")
+def filter_pdf(data: dict, request: Request):
+    user = require_login(request)
+
+    # Reuse your filter logic
+    filtered = filter_data(request, data)["results"]
+
+    # Group records by customer
+    grouped = {}
+    for row in filtered:
+        cust = row["customer"]
+        grouped.setdefault(cust, []).append(row)
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    elements = []
+
+    for customer, records in grouped.items():
+        # Customer title
+        elements.append(Table([[f"Customer: {customer}"]], colWidths=[500]))
+        elements[-1].setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 12),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+        ]))
+
+        # Table header + rows
+        table_data = [["Date", "Description", "Credit", "Payment", "Balance", "Owner"]]
+        for r in records:
+            table_data.append([
+                r["date"],
+                r.get("description", ""),
+                r.get("credit", ""),
+                r.get("payment", ""),
+                r.get("balance", ""),
+                r.get("owner", "")
+            ])
+
+        t = Table(table_data, colWidths=[60, 180, 50, 50, 50, 80])
+        t.setStyle(TableStyle([
+            ('GRID', (0,0), (-1,-1), 1, colors.black),        # borders
+            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),  # header background
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (2,1), (4,-1), 'RIGHT'),               # credit/payment/balance right
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('FONTSIZE', (0,0), (-1,-1), 10),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+        ]))
+        elements.append(t)
+        elements.append(Table([[" "]]))  # spacing between customers
+
+    doc.build(elements)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=filtered_report.pdf"}
+    )
+
 def get_local_ip():
     """Return the LAN IPv4 address of this machine."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
