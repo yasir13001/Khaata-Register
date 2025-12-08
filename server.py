@@ -654,31 +654,47 @@ def do_register(
         }
     )
 
-
-@app.post("/api/change_password")
-def change_password(request: Request, data: dict):
+@app.get("/change_password", response_class=HTMLResponse)
+def change_password_page(request: Request):
     user = require_login(request)
-    old_password = data.get("old_password")
-    new_password = data.get("new_password")
+    return templates.TemplateResponse("change_password.html", {
+        "request": request,
+        "msg": ""
+    })
+
+from fastapi import Form
+
+@app.post("/change_password", response_class=HTMLResponse)
+def change_password_submit(
+    request: Request,
+    old_password: str = Form(...),
+    new_password: str = Form(...)
+):
+    user = require_login(request)
 
     conn = get_db_connection()
     row = conn.execute("SELECT * FROM users WHERE username = ?", (user,)).fetchone()
 
     import bcrypt
 
-    # verify old password
+    # Incorrect old password
     if not bcrypt.checkpw(old_password.encode(), row["password_hash"].encode()):
         conn.close()
-        raise HTTPException(status_code=400, detail="Old password is incorrect")
+        return templates.TemplateResponse("change_password.html", {
+            "request": request,
+            "msg": "Old password is incorrect"
+        })
 
-    # update password
+    # Update password
     new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
-    conn.execute("UPDATE users SET password_hash=? WHERE username=?",
-                 (new_hash, user))
+    conn.execute("UPDATE users SET password_hash=? WHERE username=?", (new_hash, user))
     conn.commit()
     conn.close()
 
-    return {"message": "Password changed successfully"}
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "msg": "Password changed successfully. Please log in again."
+    })
 
 @app.post("/api/admin_set_password/{username}")
 def admin_set_password(username: str, data: dict, request: Request):
@@ -700,15 +716,6 @@ def admin_set_password(username: str, data: dict, request: Request):
     conn.close()
 
     return {"message": f"Password updated for {username}"}
-
-def create_admin(username, password):
-    import bcrypt
-    conn = get_db_connection()
-    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    conn.execute("INSERT INTO users(username, password_hash, role) VALUES (?,?,?)",
-                 (username, hashed, "admin"))
-    conn.commit()
-    conn.close()
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
