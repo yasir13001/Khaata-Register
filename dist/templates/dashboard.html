@@ -4,37 +4,184 @@
   <meta charset="utf-8">
   <title>Dashboard - Khaata</title>
   <style>
-    body{font-family:Segoe UI,Arial;background:#f4f6fb;margin:0;padding:0}
-    header{background:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eee}
-    .container{display:flex;gap:12px;padding:12px}
-    .left{width:240px;background:#fff;padding:10px;border-radius:6px;height:calc(100vh - 80px);overflow:auto}
-    .main{flex:1;background:#fff;padding:12px;border-radius:6px;height:calc(100vh - 80px);overflow:auto}
-    input,select,button,textarea{font-family:inherit}
-    .btn{padding:8px 10px;border:none;border-radius:6px;background:#007acc;color:#fff;cursor:pointer}
-    .muted{color:#666;font-size:13px}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:6px;border-bottom:1px solid #eee;text-align:left}
-    .form-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-    label{min-width:80px}
-    /* in your CSS */
-    .action-btn {
-      margin: 0 6px;  /* horizontal spacing */
-    }
-    td button.btn {
-      display: inline-block;
-      margin-right: 8px;
-    }
-    td button.btn:last-child {
-      margin-right: 0;
-    }
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f0f2f5;
+  margin: 0;
+  padding: 0;
+  color: #333;
+}
 
-  </style>
+/* Header */
+header {
+  background: #fff;
+  padding: 15px 25px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #ddd;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+header strong {
+  font-size: 1.5em;
+  letter-spacing: 1px;
+}
+
+/* Buttons */
+.btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #007acc, #00c6ff);
+  color: white;
+}
+.btn-primary:hover {
+  transform: scale(1.05);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.btn-danger {
+  background: #d9534f;
+  color: white;
+}
+.btn-danger:hover {
+  transform: scale(1.05);
+}
+
+/* Layout */
+.container {
+  display: flex;
+  gap: 15px;
+  padding: 15px;
+}
+
+.left {
+  width: 250px;
+  background: #1e1e2f;
+  color: #fff;
+  padding: 15px;
+  border-radius: 12px;
+  height: calc(100vh - 80px);
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.left h4 {
+  margin-top: 0;
+  font-size: 1.2em;
+  margin-bottom: 10px;
+}
+
+.left input {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+  margin-bottom: 10px;
+}
+
+/* Main content */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Card style for actions */
+.action-card {
+  background: #fff;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+  transition: all 0.3s ease;
+}
+.action-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.action-card h4 {
+  margin-bottom: 10px;
+  color: #007acc;
+}
+
+/* Forms inside cards */
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.form-row label {
+  width: 100px;     /* FIXED WIDTH FOR ALL LABELS */
+  font-weight: 600;  /* Optional: makes it cleaner */
+}
+
+.form-row input {
+  flex: 1;           /* Fills remaining space */
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.form-row input:focus {
+  border-color: #007acc;
+  box-shadow: 0 0 5px rgba(0,122,204,0.4);
+}
+
+/* Table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+th, td {
+  padding: 10px;
+  text-align: left;
+}
+
+th {
+  background: #007acc;
+  color: #fff;
+  position: sticky;
+  top: 0;
+}
+
+tbody tr:nth-child(even) {
+  background: #f9f9f9;
+}
+
+tbody tr:hover {
+  background: #e6f7ff;
+}
+
+/* Search and filter */
+#search-term {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-right: 8px;
+}
+
+</style>
 </head>
 <body>
   <header>
-    <div><strong>Khaata</strong> — Welcome {{ user }} ({{ role }})</div>
+    <div><strong>Zia Computers and Documentation Center</strong> — Welcome {{ user }} ({{ role }})</div>
     <div>
-      <button onclick="location.href='/logout'">Logout</button>
+      <button class = "btn" onclick="location.href='/logout'">Logout</button>
       
     </div>
   </header>
@@ -54,6 +201,27 @@
       <ul id="user-list" style="list-style:none;padding:0;margin:2"></ul>
       <button class= "btn" onclick="location.href='/register'">Register</button>
       {% endif %}
+      <a href="/change_password">
+      <button style="margin:10px 0 0 0px;padding:8px 10px;border:none;background:#007acc;color:white;border-radius:6px;cursor:pointer;">
+          Change Password
+      </button>
+      </a>
+      {% if role == "admin" %}
+      <a href="/admin/reset_password" style="text-decoration:none;">
+        <button style="
+            margin-top: 12px;
+            padding: 10px 18px;
+            background: #d9534f;
+            border: none;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+        ">
+          🔐 Reset User Password
+        </button>
+      </a>
+      {% endif %}
+
     </div>
 
     <div class="main">
@@ -81,13 +249,7 @@
           <div class="form-row"><label>Customer</label><input id="purchase-customer"></div>
           <div class="form-row"><label>Amount</label><input id="purchase-amount" type="number" step="0.01"></div>
           <div class="form-row"><label>Items</label><input id="purchase-items"></div>
-          
           <button class="btn" onclick="addPurchase()">Add Purchase</button>
-
-
-
-
-
         </div>
       </div>
 
@@ -98,11 +260,15 @@
         <button class="btn" onclick="loadRecords()">Search</button>
         <button class="btn" onclick="loadRecords(true)">Show All</button>
         <button class="btn" onclick="downloadCSV()">Export CSV</button>
+        {% if role == "admin" %}
         <button class="btn" onclick="openDailyReport()">Daily Report</button>
-
-
+        {% endif %}
+        {% if role == "admin" %}
+        <a href="/filter">
+          <button class = "btn">Filter Data</button>
+        </a>
+        {% endif %}
       </div>
-
       <div style="overflow:auto;height:50vh">
         <table id="records-table">
           <thead>
@@ -140,75 +306,6 @@ async function api(path, opts={}) {
   return res.json?.() ?? res;
 }
 
-async function refreshCustomers() {
-  const data = await api("/api/customers");
-  const ul = document.getElementById("customers");
-  ul.innerHTML = "";
-  data.customers.forEach(c => {
-    const li = document.createElement("li");
-    li.style.padding = "6px";
-    li.style.cursor = "pointer";
-    li.textContent = c;
-    li.onclick = () => {
-      document.getElementById("credit-customer").value = c;
-      document.getElementById("pay-customer").value = c;
-      document.getElementById("purchase-customer").value = c;
-      filterRecords(c);
-    };
-    ul.appendChild(li);
-  });
-}
-
-async function loadRecords(showAll=false) {
-  const term = document.getElementById("search-term").value.trim();
-  const data = await api("/api/credits");
-  let rows = data.records;
-  
-  if (!showAll && term) {
-    rows = rows.filter(r => r.Customer && r.Customer.toLowerCase().includes(term.toLowerCase()));
-  }
-  
-  const tbody = document.querySelector("#records-table tbody");
-  tbody.innerHTML = "";
-
-  // assuming role is defined globally, e.g., const role = "{{ role }}";
-  const isAdmin = role === "admin";
-
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-
-    ["ID","Date","Time","Customer","Description","Credit","Payment","Balance","Owner"].forEach(k => {
-      const td = document.createElement("td");
-      td.textContent = r[k] ?? "";
-      tr.appendChild(td);
-    });
-
-    if (isAdmin) {
-        const tdActions = document.createElement("td");
-
-        // Use inline-block buttons with margin instead of flex
-        const btnEdit = document.createElement("button");
-        btnEdit.textContent = "Edit";
-        btnEdit.className = "btn";
-        btnEdit.style.display = "inline-block";
-        btnEdit.style.marginRight = "8px"; // spacing to next button
-        btnEdit.onclick = () => editRecord(r.ID);
-
-        const btnDelete = document.createElement("button");
-        btnDelete.textContent = "Delete";
-        btnDelete.className = "btn";
-        btnDelete.style.display = "inline-block";
-        btnDelete.onclick = () => deleteRecord(r.ID);
-
-        tdActions.appendChild(btnEdit);
-        tdActions.appendChild(btnDelete);
-        tr.appendChild(tdActions);
-      }
-    tbody.appendChild(tr);
-  });
-}
-
-
 async function addCredit(){
   const customer = document.getElementById("credit-customer").value.trim();
   const amount = document.getElementById("credit-amount").value;
@@ -224,7 +321,7 @@ async function addCredit(){
   document.getElementById("credit-amount").value = "";
   document.getElementById("credit-desc").value = "";
 
-  refreshCustomers(); loadRecords(true);
+  loadRecords(true);
 }
 
 async function addPayment(){
@@ -241,7 +338,7 @@ async function addPayment(){
   document.getElementById("pay-amount").value = "";
   document.getElementById("pay-desc").value = "";
 
-  refreshCustomers(); loadRecords(true);
+  loadRecords(true);
 }
 
 async function addPurchase(){
@@ -259,28 +356,6 @@ async function addPurchase(){
   document.getElementById("purchase-items").value = "";
   document.getElementById("purchase-amount").value = "";
 
-}
-async function filterCustomerList() {
-    const term = document.getElementById("cust-filter").value.trim().toLowerCase();
-    const data = await api("/api/customers");
-    const ul = document.getElementById("customers");
-    ul.innerHTML = "";
-
-    data.customers
-        .filter(c => c.toLowerCase().includes(term))
-        .forEach(c => {
-            const li = document.createElement("li");
-            li.style.padding = "6px";
-            li.style.cursor = "pointer";
-            li.textContent = c;
-            li.onclick = () => {
-                document.getElementById("credit-customer").value = c;
-                document.getElementById("pay-customer").value = c;
-                document.getElementById("purchase-customer").value = c;
-                filterRecords(c);
-            };
-            ul.appendChild(li);
-        });
 }
 
 function openDailyReport() {
@@ -330,19 +405,45 @@ function makeRowEditable(tr) {
 }
 
 async function filterRecords(customer){
-  const data = await api("/api/credits");
-  const rows = data.records.filter(r => r.Customer === customer);
-  const tbody = document.querySelector("#records-table tbody");
-  tbody.innerHTML = "";
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-    ["ID","Date","Time","Customer","Description","Credit","Payment","Balance","Owner"].forEach(k=>{
-      const td = document.createElement("td");
-      td.textContent = r[k] ?? "";
-      tr.appendChild(td);
+    const data = await api("/api/credits");
+    const rows = data.records.filter(r => r.Customer === customer);
+    const tbody = document.querySelector("#records-table tbody");
+    tbody.innerHTML = "";
+
+    const isAdmin = "{{ role }}" === "admin"; // or get role dynamically if you have it in JS
+
+    rows.forEach(r => {
+        const tr = document.createElement("tr");
+
+        ["ID","Date","Time","Customer","Description","Credit","Payment","Balance","Owner"].forEach(k=>{
+            const td = document.createElement("td");
+            td.textContent = r[k] ?? "";
+            td.dataset.field = k;
+            td.dataset.id = r.ID;
+            tr.appendChild(td);
+        });
+
+        // Actions column
+        if (isAdmin) {
+            const actionTd = document.createElement("td");
+
+            const editBtn = document.createElement("button");
+            editBtn.textContent = "Edit";
+            editBtn.className = "btn";
+            editBtn.onclick = () => makeRowEditable(tr);
+
+            const deleteBtn = document.createElement("button");
+            deleteBtn.textContent = "Delete";
+            deleteBtn.className = "btn";
+            deleteBtn.onclick = () => deleteRecord(r.ID);
+
+            actionTd.appendChild(editBtn);
+            actionTd.appendChild(deleteBtn);
+            tr.appendChild(actionTd);
+        }
+
+        tbody.appendChild(tr);
     });
-    tbody.appendChild(tr);
-  });
 }
 
 async function editRecord(id){
@@ -416,6 +517,33 @@ async function saveRecord(tr) {
 
   loadRecords(true); // reload table after save
 }
+// <--------- Filter customer list -------- >
+async function filterCustomerList() {
+    const term = document.getElementById("cust-filter").value.trim().toLowerCase();
+    const ul = document.getElementById("customers");
+    ul.innerHTML = "";
+
+    if (!term) return; // if input is empty, hide the list
+
+    const data = await api("/api/customers");
+
+    const matched = data.customers.filter(c => c.toLowerCase().includes(term));
+    
+    matched.forEach(c => {
+        const li = document.createElement("li");
+        li.style.padding = "6px";
+        li.style.cursor = "pointer";
+        li.textContent = c;
+        li.onclick = () => {
+            document.getElementById("credit-customer").value = c;
+            document.getElementById("pay-customer").value = c;
+            document.getElementById("purchase-customer").value = c;
+            filterRecords(c);
+            ul.innerHTML = ""; // hide the list after selection
+        };
+        ul.appendChild(li);
+    });
+}
 
 async function onTypingCustomer(e) {
     let typed = e.target.value.trim().toLowerCase();
@@ -447,10 +575,18 @@ async function downloadCSV(){
   URL.revokeObjectURL(url);
 }
 
-
 async function loadUsers() {
+    const ul = document.getElementById("user-list");
+
+    // If list is already visible, hide it
+    if (ul.innerHTML.trim() !== "") {
+        ul.innerHTML = "";
+        return;
+    }
+
+    // Otherwise, fetch and display users
     const res = await fetch("/api/users", {
-        credentials: "include"  // <-- send session cookie
+        credentials: "include"  // send session cookie
     });
 
     if (!res.ok) {
@@ -460,8 +596,6 @@ async function loadUsers() {
     }
 
     const data = await res.json();
-
-    const ul = document.getElementById("user-list");
     ul.innerHTML = "";
 
     data.users.forEach(u => {
@@ -476,7 +610,6 @@ async function loadUsers() {
         ul.appendChild(li);
     });
 }
-
 
 async function deleteUser(username) {
     if (!confirm("Delete user '" + username + "'?")) return;
@@ -497,14 +630,12 @@ async function deleteUser(username) {
     loadUsers();
 }
 
-
-
 document.getElementById("credit-customer").addEventListener("input", onTypingCustomer);
 document.getElementById("pay-customer").addEventListener("input", onTypingCustomer);
 document.getElementById("purchase-customer").addEventListener("input", onTypingCustomer);
 document.getElementById("cust-filter").addEventListener("input", filterCustomerList);
 
-window.addEventListener("load", ()=>{ refreshCustomers(); loadRecords(true); });
+window.addEventListener("load", ()=>{ loadRecords(true); });
 </script>
 
 </body>

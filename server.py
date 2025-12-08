@@ -428,10 +428,6 @@ def require_admin(request: Request):
 
     return username
 
-@app.get("/debug-session")
-def debug_session(request: Request):
-    return {"session": dict(request.session)}
-
 @app.delete("/api/delete_record/{record_id}")
 def api_delete_record(record_id: str, admin=Depends(require_admin)):
     if not delete_credit(record_id):
@@ -577,7 +573,6 @@ def do_login(request: Request, username: str = Form(...), password: str = Form(.
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login")
-
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
@@ -1083,19 +1078,19 @@ if __name__ == "__main__":
     
     # <------for development mode-------->
     # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    # uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
     
 
 # for delivery mode
 # To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
-    # cfg = load_config()
-    # uvicorn.run(
-    #     app,
-    #     host=cfg["host"],
-    #     port=cfg["port"],
-    #     log_level=cfg["log_level"],
-    #     access_log=cfg["access_log"],
-    # )
+    cfg = load_config()
+    uvicorn.run(
+        app,
+        host=cfg["host"],
+        port=cfg["port"],
+        log_level=cfg["log_level"],
+        access_log=cfg["access_log"],
+    )
 
 
 
