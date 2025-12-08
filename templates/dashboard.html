@@ -59,7 +59,21 @@
           Change Password
       </button>
       </a>
-
+      {% if role == "admin" %}
+      <a href="/admin/reset_password" style="text-decoration:none;">
+        <button style="
+            margin-top: 12px;
+            padding: 10px 18px;
+            background: #d9534f;
+            border: none;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+        ">
+          🔐 Reset User Password
+        </button>
+      </a>
+      {% endif %}
 
     </div>
 

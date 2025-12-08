@@ -21,6 +21,8 @@ from pathlib import Path
 import sqlite3
 import io
 from contextlib import asynccontextmanager
+from fastapi import Form
+
 
 
 secrets.token_hex(32)
@@ -348,7 +350,6 @@ def add_payment(customer: str, amount: Decimal, description: str, owner: str):
     ))
     conn.commit()
     conn.close()
-
     
 def delete_credit(record_id: int):
     conn = get_db_connection()
@@ -403,7 +404,6 @@ def delete_user(username: str):
         conn.close()
         return True, "User deleted"
 
-
 @app.delete("/api/delete_user/{username}")
 def api_delete_user(username: str, request: Request):
     user = require_login(request)
@@ -415,7 +415,6 @@ def api_delete_user(username: str, request: Request):
     success, msg = delete_user(username)
     return {"success": success, "message": msg}
 
-# ---------------------------
 # Admin permission check
 # ---------------------------
 def require_admin(request: Request):
@@ -611,31 +610,25 @@ def do_register(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    role: str = Form("user")   # New → admin can choose role
+    role: str = Form("user")
 ):
-    # Only admin can create users if users already exist
+    # Only admin can create users once users exist
     if users_exist():
-        user = request.session.get("user")
-        if not user or get_user_role(user) != "admin":
+        logged_user = request.session.get("user")
+        if not logged_user or get_user_role(logged_user) != "admin":
             return templates.TemplateResponse(
                 "login.html",
-                {
-                    "request": request,
-                    "msg": "Access denied"
-                }
+                {"request": request, "msg": "Access denied"}
             )
 
-        current_user_role = get_user_role(user)
+        current_user_role = "admin"
+
     else:
         # First user ever must be admin
         role = "admin"
         current_user_role = "admin"
 
-    # If non-admin somehow attempts to submit admin role → block
-    if current_user_role != "admin":
-        role = "user"
-
-    # Attempt to add user
+    # Add user
     if not add_user(username, password, role):
         return templates.TemplateResponse(
             "register.html",
@@ -646,11 +639,13 @@ def do_register(
             }
         )
 
+    # SUCCESS → return form again, not login page
     return templates.TemplateResponse(
-        "login.html",
+        "register.html",
         {
             "request": request,
-            "msg": f"User '{username}' created. Please login."
+            "msg": f"User '{username}' created successfully!",
+            "current_user_role": current_user_role
         }
     )
 
@@ -661,8 +656,6 @@ def change_password_page(request: Request):
         "request": request,
         "msg": ""
     })
-
-from fastapi import Form
 
 @app.post("/change_password", response_class=HTMLResponse)
 def change_password_submit(
@@ -696,26 +689,44 @@ def change_password_submit(
         "msg": "Password changed successfully. Please log in again."
     })
 
-@app.post("/api/admin_set_password/{username}")
-def admin_set_password(username: str, data: dict, request: Request):
+@app.get("/admin/reset_password", response_class=HTMLResponse)
+def admin_reset_password_page(request: Request):
     admin = require_login(request)
-
     if get_user_role(admin) != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can set passwords")
+        raise HTTPException(status_code=403, detail="Admins only")
 
-    new_password = data.get("new_password")
-    if not new_password:
-        raise HTTPException(status_code=400, detail="Missing password")
+    users = read_users()  # return list of {username, role, ...}
+
+    return templates.TemplateResponse("reset_password.html", {
+        "request": request,
+        "users": users,
+        "msg": ""
+    })
+
+@app.post("/admin/reset_password")
+def admin_reset_password(
+    request: Request,
+    username: str = Form(...),
+    new_password: str = Form(...)
+):
+    admin = require_login(request)
+    if get_user_role(admin) != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
 
     import bcrypt
-    new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
 
     conn = get_db_connection()
-    conn.execute("UPDATE users SET password_hash=? WHERE username=?", (new_hash, username))
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET password_hash=? WHERE username=?", (hashed, username))
     conn.commit()
     conn.close()
 
-    return {"message": f"Password updated for {username}"}
+    return templates.TemplateResponse("reset_password.html", {
+        "request": request,
+        "users": read_users(),
+        "msg": f"Password reset for {username}"
+    })
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
