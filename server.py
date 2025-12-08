@@ -94,24 +94,7 @@ def init_db():
                   ("admin", hashed, "admin"))
     conn.commit()
     conn.close()
-
-def ensure_credits_table():
-    conn = get_db_connection()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS credits (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Date TEXT NOT NULL,
-            Time TEXT NOT NULL,
-            Customer TEXT NOT NULL,
-            Description TEXT,
-            Credit TEXT DEFAULT '0',
-            Payment TEXT DEFAULT '0',
-            Balance TEXT DEFAULT '0',
-            Owner TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
+# < ------------- User Helper Functions ----------->
 
 def add_user(username: str, password: str, role: str = "user"):
     conn = get_db_connection()
@@ -143,23 +126,6 @@ def authenticate_user(username: str, password: str):
         return row[1]
     return None
 
-def add_credit(customer, amount, description, owner):
-    conn = get_db_connection()
-    c = conn.cursor()
-    from datetime import datetime
-    now = datetime.now()
-    date, time = now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S")
-    
-    # Compute balance
-    c.execute("SELECT SUM(credit)-SUM(payment) FROM credits WHERE customer=?", (customer,))
-    prev_balance = c.fetchone()[0] or 0
-    new_balance = prev_balance + amount
-    
-    c.execute("""INSERT INTO credits(date,time,customer,description,credit,payment,balance,owner)
-                 VALUES(?,?,?,?,?,?,?,?)""",
-              (date,time,customer,description,amount,0,new_balance,owner))
-    conn.commit()
-    conn.close()
 def read_users():
     conn = get_db_connection()
     users = conn.execute("SELECT username, role FROM users").fetchall()
@@ -172,16 +138,6 @@ def users_exist() -> bool:
     count = cur.fetchone()[0]
     conn.close()
     return count > 0
-
-def read_credits():
-    ensure_credits_table()  # make sure table exists
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM credits")
-    rows = cur.fetchall()
-    conn.close()
-    # Convert sqlite3.Row to dict
-    return [dict(r) for r in rows]
 
 def add_user(username: str, password: str, role: str = "user") -> bool:
     if get_user_role(username):  # already exists
@@ -224,6 +180,53 @@ def require_admin(username: str = Depends(require_login)):
     return username
 
 # ---------- Helpers: Credits and Purchases ----------
+
+def read_credits():
+    ensure_credits_table()  # make sure table exists
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM credits")
+    rows = cur.fetchall()
+    conn.close()
+    # Convert sqlite3.Row to dict
+    return [dict(r) for r in rows]
+
+def add_credit(customer, amount, description, owner):
+    conn = get_db_connection()
+    c = conn.cursor()
+    from datetime import datetime
+    now = datetime.now()
+    date, time = now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S")
+    
+    # Compute balance
+    c.execute("SELECT SUM(credit)-SUM(payment) FROM credits WHERE customer=?", (customer,))
+    prev_balance = c.fetchone()[0] or 0
+    new_balance = prev_balance + amount
+    
+    c.execute("""INSERT INTO credits(date,time,customer,description,credit,payment,balance,owner)
+                 VALUES(?,?,?,?,?,?,?,?)""",
+              (date,time,customer,description,amount,0,new_balance,owner))
+    conn.commit()
+    conn.close()
+
+def ensure_credits_table():
+    conn = get_db_connection()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS credits (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Date TEXT NOT NULL,
+            Time TEXT NOT NULL,
+            Customer TEXT NOT NULL,
+            Description TEXT,
+            Credit TEXT DEFAULT '0',
+            Payment TEXT DEFAULT '0',
+            Balance TEXT DEFAULT '0',
+            Owner TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
 def row_to_dict(r):
     return {
         "ID": r["id"],
@@ -579,7 +582,7 @@ def logout(request: Request):
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    # Only admin can register if users exist
+    # Check if any user already exists
     if users_exist():
         user = request.session.get("user")
         if not user or get_user_role(user) != "admin":
@@ -587,33 +590,125 @@ def register_page(request: Request):
                 "request": request,
                 "msg": "Only admin can register users."
             })
-    return templates.TemplateResponse("register.html", {"request": request, "msg": ""})
+
+        current_role = get_user_role(user)
+    else:
+        # First user ever → must be admin
+        current_role = "admin"
+
+    return templates.TemplateResponse(
+        "register.html",
+        {
+            "request": request,
+            "msg": "",
+            "current_user_role": current_role
+        }
+    )
 
 
-@app.post("/register")
+@app.post("/register", response_class=HTMLResponse)
 def do_register(
     request: Request,
     username: str = Form(...),
-    password: str = Form(...)
+    password: str = Form(...),
+    role: str = Form("user")   # New → admin can choose role
 ):
-    # Only admin may create users if USER_FILE exists
-   if users_exist():
-    user = request.session.get("user")
-    if not user or get_user_role(user) != "admin":
-        return templates.TemplateResponse("login.html", {"request": request, "msg": "Access denied"})
+    # Only admin can create users if users already exist
+    if users_exist():
+        user = request.session.get("user")
+        if not user or get_user_role(user) != "admin":
+            return templates.TemplateResponse(
+                "login.html",
+                {
+                    "request": request,
+                    "msg": "Access denied"
+                }
+            )
 
+        current_user_role = get_user_role(user)
+    else:
+        # First user ever must be admin
+        role = "admin"
+        current_user_role = "admin"
 
-    # Try to add user
-    if not add_user(username, password, "user"):
-        return templates.TemplateResponse("register.html", {
+    # If non-admin somehow attempts to submit admin role → block
+    if current_user_role != "admin":
+        role = "user"
+
+    # Attempt to add user
+    if not add_user(username, password, role):
+        return templates.TemplateResponse(
+            "register.html",
+            {
+                "request": request,
+                "msg": f"User '{username}' already exists!",
+                "current_user_role": current_user_role
+            }
+        )
+
+    return templates.TemplateResponse(
+        "login.html",
+        {
             "request": request,
-            "msg": f"User '{username}' already exists!"
-        })
+            "msg": f"User '{username}' created. Please login."
+        }
+    )
 
-    return templates.TemplateResponse("login.html", {
-        "request": request,
-        "msg": f"User {username} created. Please login."
-    })
+
+@app.post("/api/change_password")
+def change_password(request: Request, data: dict):
+    user = require_login(request)
+    old_password = data.get("old_password")
+    new_password = data.get("new_password")
+
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM users WHERE username = ?", (user,)).fetchone()
+
+    import bcrypt
+
+    # verify old password
+    if not bcrypt.checkpw(old_password.encode(), row["password_hash"].encode()):
+        conn.close()
+        raise HTTPException(status_code=400, detail="Old password is incorrect")
+
+    # update password
+    new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    conn.execute("UPDATE users SET password_hash=? WHERE username=?",
+                 (new_hash, user))
+    conn.commit()
+    conn.close()
+
+    return {"message": "Password changed successfully"}
+
+@app.post("/api/admin_set_password/{username}")
+def admin_set_password(username: str, data: dict, request: Request):
+    admin = require_login(request)
+
+    if get_user_role(admin) != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can set passwords")
+
+    new_password = data.get("new_password")
+    if not new_password:
+        raise HTTPException(status_code=400, detail="Missing password")
+
+    import bcrypt
+    new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+
+    conn = get_db_connection()
+    conn.execute("UPDATE users SET password_hash=? WHERE username=?", (new_hash, username))
+    conn.commit()
+    conn.close()
+
+    return {"message": f"Password updated for {username}"}
+
+def create_admin(username, password):
+    import bcrypt
+    conn = get_db_connection()
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    conn.execute("INSERT INTO users(username, password_hash, role) VALUES (?,?,?)",
+                 (username, hashed, "admin"))
+    conn.commit()
+    conn.close()
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
@@ -849,19 +944,19 @@ if __name__ == "__main__":
     
     # <------for development mode-------->
     # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    # uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
     
 
 # for delivery mode
 # To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
-    cfg = load_config()
-    uvicorn.run(
-        app,
-        host=cfg["host"],
-        port=cfg["port"],
-        log_level=cfg["log_level"],
-        access_log=cfg["access_log"],
-    )
+    # cfg = load_config()
+    # uvicorn.run(
+    #     app,
+    #     host=cfg["host"],
+    #     port=cfg["port"],
+    #     log_level=cfg["log_level"],
+    #     access_log=cfg["access_log"],
+    # )
 
 
 
