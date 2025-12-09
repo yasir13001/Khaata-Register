@@ -97,8 +97,7 @@ function formatDisplayDate() {
     }
 
     // Convert YYYY-MM-DD → DD-MM-YYYY
-    const [y, m, day] = d.split("-");
-    document.getElementById("displayDate").textContent = `${day}-${m}-${y}`;
+    document.getElementById("displayDate").textContent = d;
 }
 
 async function loadReport() {
@@ -109,11 +108,11 @@ async function loadReport() {
     let data = await res.json();
 
     // Convert for display
-    const [y, m, d] = data.date.split("-");
-    let displayDate = `${d}-${m}-${y}`;
+    // const [y, m, d] = data.date.split("-");
+    // let displayDate = `${d}-${m}-${y}`;
 
     let html = `
-        <h3>Summary for ${displayDate}</h3>
+        <h3>Summary for ${date}</h3>
         <p><b>Total Credit:</b> ${data.total_credit}</p>
         <p><b>Total Payment:</b> ${data.total_payment}</p>
         <p><b>Net Change:</b> ${data.net_change}</p>
@@ -140,7 +139,7 @@ async function loadReport() {
     let rows = data.records.map(r => `
         <tr>
             <td>${r.ID}</td>
-            <td>${convertDate(r.Date)}</td>
+            <td>${r.Date}</td>
             <td>${r.Time}</td>
             <td>${r.Customer}</td>
             <td>${r.Description}</td>
@@ -155,11 +154,6 @@ async function loadReport() {
         rows;
 }
 
-// Convert YYYY-MM-DD → DD-MM-YYYY for table
-function convertDate(dateStr) {
-    const [y, m, d] = dateStr.split("-");
-    return `${d}-${m}-${y}`;
-}
 </script>
 
 </body>
