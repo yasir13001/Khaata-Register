@@ -4,292 +4,216 @@
   <meta charset="utf-8">
   <title>Dashboard - Khaata</title>
   <style>
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #f0f2f5;
-  margin: 0;
-  padding: 0;
-  color: #333;
-}
+    /* base */
+    body{font-family:Segoe UI,Arial, sans-serif;background:#f4f6fb;margin:0;padding:0}
+    header{background:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eee;box-shadow:0 2px 8px rgba(0,0,0,0.03)}
+    .container{display:flex;gap:12px;padding:12px}
+    .left{width:260px;background:linear-gradient(180deg,#1f2937,#111827);color:#fff;padding:14px;border-radius:8px;height:calc(100vh - 80px);overflow:auto;box-shadow:0 6px 20px rgba(0,0,0,0.08)}
+    .main{flex:1;background:transparent;padding:12px}
+    input,select,button,textarea{font-family:inherit}
+    .btn{padding:8px 12px;border:none;border-radius:8px;background:#007acc;color:#fff;cursor:pointer;transition:all .18s ease;font-weight:700} /* bold by default */
+    .btn:active{transform:translateY(1px)}
+    .muted{color:#666;font-size:13px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid #eee;text-align:left}
+    .form-row{display:flex;gap:12px;align-items:center;margin-bottom:8px}
+    /* FIX: make labels fixed width and right-aligned so inputs line up */
+    .form-row label{width:100px;min-width:100px;text-align:right;padding-right:6px;font-weight:600;color:#333}
+    .form-row input{flex:1;padding:8px;border-radius:6px;border:1px solid #d3dbe6}
+    .form-row select{flex:1;padding:8px;border-radius:6px;border:1px solid #d3dbe6}
+    .form-row textarea{flex:1;padding:8px;border-radius:6px;border:1px solid #d3dbe6;min-height:54px}
+    /* button row: right aligned and separated from the rest */
+    .form-row-btn{display:flex;justify-content:flex-end;margin-top:10px}
+    .form-row-btn .btn{font-weight:800} /* extra bold specifically */
+    /* style cards */
+    .card{background:#fff;padding:14px;border-radius:10px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+    .actions-row{display:flex;gap:12px}
+    .action-card{flex:1}
+    /* table looks */
+    thead th{background:#007acc;color:#fff;position:sticky;top:0}
+    tbody tr:nth-child(even){background:#fbfcff}
+    tbody tr:hover{background:#eef8ff}
+    /* left list */
+    #customers li{padding:8px;border-radius:6px;margin-bottom:6px;background:rgba(255,255,255,0.03);cursor:pointer}
+    #customers li:hover{background:rgba(255,255,255,0.06)}
 
-/* Header */
-header {
-  background: #fff;
-  padding: 15px 25px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #ddd;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
+    .suggest-list {
+      list-style:none;
+      margin:0;
+      padding:0;
+      border:1px solid #ccc;
+      border-radius:6px;
+      max-height:120px;
+      overflow-y:auto;
+      position:absolute;
+      background:white;
+      z-index:999;
+    }
+    .suggest-list li {
+      padding:6px;
+      cursor:pointer;
+    }
+    .suggest-list li.highlight {
+      background:#007acc;
+      color:white;
+    }
+    .suggest-list li:hover { background:#eef; }
+        /* small responsive tweak */
+        @media (max-width:900px){
+          .container{flex-direction:column}
+          .left{width:100%;height:auto}
+          .form-row label{width:110px}
+        }
 
-header strong {
-  font-size: 1.5em;
-  letter-spacing: 1px;
-}
-
-/* Buttons */
-.btn {
-  padding: 10px 16px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-weight: 600;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #007acc, #00c6ff);
-  color: white;
-}
-.btn-primary:hover {
-  transform: scale(1.05);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-}
-
-.btn-danger {
-  background: #d9534f;
-  color: white;
-}
-.btn-danger:hover {
-  transform: scale(1.05);
-}
-
-/* Layout */
-.container {
-  display: flex;
-  gap: 15px;
-  padding: 15px;
-}
-
-.left {
-  width: 250px;
-  background: #1e1e2f;
-  color: #fff;
-  padding: 15px;
-  border-radius: 12px;
-  height: calc(100vh - 80px);
-  overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-}
-
-.left h4 {
-  margin-top: 0;
-  font-size: 1.2em;
-  margin-bottom: 10px;
-}
-
-.left input {
-  width: 100%;
-  padding: 8px;
-  border-radius: 6px;
-  border: none;
-  margin-bottom: 10px;
-}
-
-/* Main content */
-.main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-/* Card style for actions */
-.action-card {
-  background: #fff;
-  padding: 15px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-  transition: all 0.3s ease;
-}
-.action-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-}
-
-.action-card h4 {
-  margin-bottom: 10px;
-  color: #007acc;
-}
-
-/* Forms inside cards */
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.form-row label {
-  width: 100px;     /* FIXED WIDTH FOR ALL LABELS */
-  font-weight: 600;  /* Optional: makes it cleaner */
-}
-
-.form-row input {
-  flex: 1;           /* Fills remaining space */
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-}
-
-.form-row input:focus {
-  border-color: #007acc;
-  box-shadow: 0 0 5px rgba(0,122,204,0.4);
-}
-
-/* Table */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-}
-
-th, td {
-  padding: 10px;
-  text-align: left;
-}
-
-th {
-  background: #007acc;
-  color: #fff;
-  position: sticky;
-  top: 0;
-}
-
-tbody tr:nth-child(even) {
-  background: #f9f9f9;
-}
-
-tbody tr:hover {
-  background: #e6f7ff;
-}
-
-/* Search and filter */
-#search-term {
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  margin-right: 8px;
-}
-
-</style>
+    /* Keep the action buttons inside table compact */
+    td .btn{padding:6px 8px;border-radius:6px;font-size:13px}
+    td .btn + .btn {margin-left:8px}
+  </style>
 </head>
 <body>
   <header>
-    <div><strong>Zia Computers and Documentation Center</strong> — Welcome {{ user }} ({{ role }})</div>
+    <div><strong>ZIA COMPUTERS AND DOCUMENTATION CENTER</strong> — Welcome {{ user }} ({{ role }})</div>
     <div>
-      <button class = "btn" onclick="location.href='/logout'">Logout</button>
-      
+      <button class="btn" onclick="location.href='/logout'">Logout</button>
     </div>
   </header>
 
   <div class="container">
     <div class="left">
-      <h4>Customers</h4>
-      <input id="cust-filter" placeholder="Search customers..." style="width:80%;padding:6px;margin-bottom:8px">
+      <h4 style="margin-top:0">Customers</h4>
+      <input id="cust-filter" placeholder="Search customers..." style="width:95%;padding:8px;margin-bottom:8px;border-radius:6px;border:none">
       <ul id="customers" style="list-style:none;padding:0;margin:0"></ul>
-      <hr>
+      <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:12px 0">
       <h4>Purchases</h4>
       <button class="btn" onclick="showPurchases()">Show Purchases</button>
+
       {% if role == "admin" %}
-      <hr>
+      <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:12px 0">
       <h4>User Management</h4>
       <button class="btn" onclick="loadUsers()">Manage Users</button>
-      <ul id="user-list" style="list-style:none;padding:0;margin:2"></ul>
-      <button class= "btn" onclick="location.href='/register'">Register</button>
+      <ul id="user-list" style="list-style:none;padding:0;margin:6px 0"></ul>
+      <button class="btn" onclick="location.href='/register'">Register</button>
       {% endif %}
-      <a href="/change_password">
-      <button style="margin:10px 0 0 0px;padding:8px 10px;border:none;background:#007acc;color:white;border-radius:6px;cursor:pointer;">
-          Change Password
-      </button>
+
+      <a href="/change_password" style="display:block;margin-top:10px;text-decoration:none">
+        <button class="btn" style="background:#0ea5a5">Change Password</button>
       </a>
+
       {% if role == "admin" %}
-      <a href="/admin/reset_password" style="text-decoration:none;">
-        <button style="
-            margin-top: 12px;
-            padding: 10px 18px;
-            background: #d9534f;
-            border: none;
-            color: white;
-            border-radius: 6px;
-            cursor: pointer;
-        ">
+      <a href="/admin/reset_password" style="text-decoration:none;display:block;margin-top:12px">
+        <button style="padding:10px 18px;background:#d9534f;border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700">
           🔐 Reset User Password
         </button>
       </a>
       {% endif %}
-
     </div>
 
     <div class="main">
-      <h3>Actions</h3>
+      <div class="card">
+        <h3 style="margin:0 0 12px 0">Actions</h3>
 
-      <div style="display:flex;gap:12px">
-        <div style="flex:1">
-          <h4>Add Credit</h4>
-          <div class="form-row"><label>Customer</label><input id="credit-customer"></div>
-          <div class="form-row"><label>Amount</label><input id="credit-amount" type="number" step="0.01"></div>
-          <div class="form-row"><label>Desc</label><input id="credit-desc"></div>
-          <button class="btn" onclick="addCredit()">Add Credit</button>
-        </div>
+        <div class="actions-row">
+          <div class="action-card card">
+            <h4 style="color:#007acc;margin-top:0">Add Credit</h4>
+            <div class="form-row">
+              <label for="credit-customer">Customer</label>
+              <input id="credit-customer" placeholder="Customer name">
+              <ul id="credit-suggest" class="suggest-list"></ul>
+            </div>
+            <div class="form-row">
+              <label for="credit-amount">Amount</label>
+              <input id="credit-amount" type="number" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-row">
+              <label for="credit-desc">Desc</label>
+              <input id="credit-desc" placeholder="Description">
+            </div>
 
-        <div style="flex:1">
-          <h4>Record Payment</h4>
-          <div class="form-row"><label>Customer</label><input id="pay-customer"></div>
-          <div class="form-row"><label>Amount</label><input id="pay-amount" type="number" step="0.01"></div>
-          <div class="form-row"><label>Desc</label><input id="pay-desc"></div>
-          <button class="btn" onclick="addPayment()">Record Payment</button>
-        </div>
+            <!-- RIGHT-ALIGNED BOLD BUTTON -->
+            <div class="form-row-btn">
+              <button class="btn" onclick="addCredit()">Add Credit</button>
+            </div>
+          </div>
 
-        <div style="flex:1">
-          <h4>Add Purchase</h4>
-          <div class="form-row"><label>Customer</label><input id="purchase-customer"></div>
-          <div class="form-row"><label>Amount</label><input id="purchase-amount" type="number" step="0.01"></div>
-          <div class="form-row"><label>Items</label><input id="purchase-items"></div>
-          <button class="btn" onclick="addPurchase()">Add Purchase</button>
+          <div class="action-card card">
+            <h4 style="color:#007acc;margin-top:0">Record Payment</h4>
+            <div class="form-row">
+              <label for="pay-customer">Customer</label>
+              <input id="pay-customer" placeholder="Customer name">
+              <ul id="pay-suggest" class="suggest-list"></ul>
+            </div>
+            <div class="form-row">
+              <label for="pay-amount">Amount</label>
+              <input id="pay-amount" type="number" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-row">
+              <label for="pay-desc">Desc</label>
+              <input id="pay-desc" placeholder="Description">
+            </div>
+
+            <div class="form-row-btn">
+              <button class="btn" onclick="addPayment()">Record Payment</button>
+            </div>
+          </div>
+
+          <div class="action-card card">
+            <h4 style="color:#007acc;margin-top:0">Add Purchase</h4>
+            <div class="form-row">
+              <label for="purchase-customer">Customer</label>
+              <input id="purchase-customer" placeholder="Customer name">
+              <ul id="purchase-suggest" class="suggest-list"></ul>
+            </div>
+            <div class="form-row">
+              <label for="purchase-amount">Amount</label>
+              <input id="purchase-amount" type="number" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-row">
+              <label for="purchase-items">Items</label>
+              <input id="purchase-items" placeholder="Items bought">
+            </div>
+
+            <div class="form-row-btn">
+              <button class="btn" onclick="addPurchase()">Add Purchase</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <hr>
-      <h3>Records</h3>
-      <div style="margin-bottom:8px">
-        <input id="search-term" placeholder="Search customer..." style="padding:6px">
-        <button class="btn" onclick="loadRecords()">Search</button>
-        <button class="btn" onclick="loadRecords(true)">Show All</button>
-        <button class="btn" onclick="downloadCSV()">Export CSV</button>
-        {% if role == "admin" %}
-        <button class="btn" onclick="openDailyReport()">Daily Report</button>
-        {% endif %}
-        {% if role == "admin" %}
-        <a href="/filter">
-          <button class = "btn">Filter Data</button>
-        </a>
-        {% endif %}
-      </div>
-      <div style="overflow:auto;height:50vh">
-        <table id="records-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Customer</th>
-              <th>Description</th>
-              <th>Credit</th>
-              <th>Payment</th>
-              <th>Balance</th>
-              <th>Owner</th>
-              {% if role == "admin" %}
-              <th>Actions</th>  <!-- <- put it here, inside the header row -->
-              {% endif %}
-            </tr>
-          </thead>
+      <div class="card" style="margin-top:14px">
+        <h3 style="margin:0 0 12px 0">Records</h3>
 
-          <tbody></tbody>
-        </table>
+        <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="search-term" placeholder="Search customer..." style="padding:8px;border-radius:6px;border:1px solid #d3dbe6">
+          <button class="btn" onclick="loadRecords()">Search</button>
+          <button class="btn" onclick="loadRecords(true)">Show All</button>
+          <button class="btn" onclick="downloadCSV()">Export CSV</button>
+          {% if role == "admin" %}
+          <button class="btn" onclick="openDailyReport()">Daily Report</button>
+          <a href="/filter"><button class="btn" style="background:#0ea5a5">Filter Data</button></a>
+          {% endif %}
+        </div>
+
+        <div style="overflow:auto;height:50vh;margin-top:8px" class="card">
+          <table id="records-table" style="border-radius:8px;overflow:hidden">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Customer</th>
+                <th>Description</th>
+                <th>Credit</th>
+                <th>Payment</th>
+                <th>Balance</th>
+                <th>Owner</th>
+                {% if role == "admin" %}
+                <th>Actions</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -303,7 +227,10 @@ async function api(path, opts={}) {
     alert("Error: " + res.status + "\\n" + t);
     throw new Error(t);
   }
-  return res.json?.() ?? res;
+  // some responses might not be JSON
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return res.json();
+  return res.text();
 }
 
 async function addCredit(){
@@ -312,15 +239,11 @@ async function addCredit(){
   const description = document.getElementById("credit-desc").value;
   if(!customer || !amount){ alert("fill fields"); return; }
   await api("/api/add_credit", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({customer, amount, description})});
-  // alert("Credit added");
-    // CLEAR FIELDS
   document.getElementById("credit-customer").value = "";
   document.getElementById("pay-customer").value = "";
   document.getElementById("purchase-customer").value = "";
-
   document.getElementById("credit-amount").value = "";
   document.getElementById("credit-desc").value = "";
-
   loadRecords(true);
 }
 
@@ -330,14 +253,11 @@ async function addPayment(){
   const description = document.getElementById("pay-desc").value;
   if(!customer || !amount){ alert("fill fields"); return; }
   await api("/api/add_payment", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({customer, amount, description})});
-  // alert("Payment recorded");
-  // CLEAR FIELDS
   document.getElementById("credit-customer").value = "";
   document.getElementById("purchase-customer").value = "";
   document.getElementById("pay-customer").value = "";
   document.getElementById("pay-amount").value = "";
   document.getElementById("pay-desc").value = "";
-
   loadRecords(true);
 }
 
@@ -347,15 +267,10 @@ async function addPurchase(){
   const amount = document.getElementById("purchase-amount").value;
   if(!customer || !items || !amount){ alert("fill fields"); return; }
   await api("/api/add_purchase", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({customer, items, amount})});
-  // alert("Purchase added");
-
-  // CLEAR FIELDS
   document.getElementById("purchase-customer").value = "";
   document.getElementById("credit-customer").value = "";
-  document.getElementById("purchase-customer").value = "";
   document.getElementById("purchase-items").value = "";
   document.getElementById("purchase-amount").value = "";
-
 }
 
 function openDailyReport() {
@@ -363,7 +278,7 @@ function openDailyReport() {
 }
 
 function showPurchases() {
-    const { protocol, host } = window.location; // host includes hostname:port
+    const { protocol, host } = window.location;
     const url = `${protocol}//${host}/purchases`;
     window.open(url, "_blank");
 }
@@ -377,8 +292,7 @@ function makeRowEditable(tr) {
   const cells = tr.querySelectorAll("td[data-field]");
   cells.forEach(td => {
     const field = td.dataset.field;
-    if (["ID","Date","Time","Balance","Owner"].includes(field)) return; // skip read-only fields
-
+    if (["ID","Date","Time","Balance","Owner"].includes(field)) return;
     const input = document.createElement("input");
     input.value = td.textContent;
     input.style.width = "100%";
@@ -386,20 +300,16 @@ function makeRowEditable(tr) {
     td.appendChild(input);
   });
 
-  // Replace Edit button with Save & Cancel
   const actionTd = tr.querySelector("td:last-child");
   actionTd.innerHTML = "";
-
   const saveBtn = document.createElement("button");
   saveBtn.textContent = "Save";
   saveBtn.className = "btn";
   saveBtn.onclick = () => saveRecord(tr);
-
   const cancelBtn = document.createElement("button");
   cancelBtn.textContent = "Cancel";
   cancelBtn.className = "btn";
-  cancelBtn.onclick = () => loadRecords(true); // reload to cancel edit
-
+  cancelBtn.onclick = () => loadRecords(true);
   actionTd.appendChild(saveBtn);
   actionTd.appendChild(cancelBtn);
 }
@@ -409,12 +319,9 @@ async function filterRecords(customer){
     const rows = data.records.filter(r => r.Customer === customer);
     const tbody = document.querySelector("#records-table tbody");
     tbody.innerHTML = "";
-
-    const isAdmin = "{{ role }}" === "admin"; // or get role dynamically if you have it in JS
-
+    const isAdmin = "{{ role }}" === "admin";
     rows.forEach(r => {
         const tr = document.createElement("tr");
-
         ["ID","Date","Time","Customer","Description","Credit","Payment","Balance","Owner"].forEach(k=>{
             const td = document.createElement("td");
             td.textContent = r[k] ?? "";
@@ -422,33 +329,27 @@ async function filterRecords(customer){
             td.dataset.id = r.ID;
             tr.appendChild(td);
         });
-
-        // Actions column
         if (isAdmin) {
             const actionTd = document.createElement("td");
-
             const editBtn = document.createElement("button");
             editBtn.textContent = "Edit";
             editBtn.className = "btn";
             editBtn.onclick = () => makeRowEditable(tr);
-
             const deleteBtn = document.createElement("button");
             deleteBtn.textContent = "Delete";
             deleteBtn.className = "btn";
             deleteBtn.onclick = () => deleteRecord(r.ID);
-
             actionTd.appendChild(editBtn);
             actionTd.appendChild(deleteBtn);
             tr.appendChild(actionTd);
         }
-
         tbody.appendChild(tr);
     });
 }
 
 async function editRecord(id){
   const newDesc = prompt("Enter new description:");
-  if(newDesc === null) return;  // user canceled
+  if(newDesc === null) return;
   await api("/api/edit_record/" + id, {
     method: "PUT",
     headers: { "content-type": "application/json" },
@@ -460,7 +361,7 @@ async function editRecord(id){
 async function loadRecords(showAll=false) {
   const term = document.getElementById("search-term").value.trim();
   const data = await api("/api/credits");
-  let rows = data.records;
+  let rows = data.records || [];
   if (!showAll && term) {
     rows = rows.filter(r => r.Customer && r.Customer.toLowerCase().includes(term.toLowerCase()));
   }
@@ -473,24 +374,20 @@ async function loadRecords(showAll=false) {
     ["ID","Date","Time","Customer","Description","Credit","Payment","Balance","Owner"].forEach(k=>{
       const td = document.createElement("td");
       td.textContent = r[k] ?? "";
-      td.dataset.field = k;          // store field name for editing
-      td.dataset.id = r.ID;           // store record ID
+      td.dataset.field = k;
+      td.dataset.id = r.ID;
       tr.appendChild(td);
     });
 
-    // Actions column
     const actionTd = document.createElement("td");
-
     const editBtn = document.createElement("button");
     editBtn.textContent = "Edit";
     editBtn.className = "btn";
     editBtn.onclick = () => makeRowEditable(tr);
-
     const deleteBtn = document.createElement("button");
     deleteBtn.textContent = "Delete";
     deleteBtn.className = "btn";
     deleteBtn.onclick = () => deleteRecord(r.ID);
-
     actionTd.appendChild(editBtn);
     actionTd.appendChild(deleteBtn);
     tr.appendChild(actionTd);
@@ -501,34 +398,26 @@ async function loadRecords(showAll=false) {
 async function saveRecord(tr) {
   const id = tr.querySelector("td[data-field='ID']").textContent;
   const updated = {};
-  
   tr.querySelectorAll("td[data-field]").forEach(td => {
     const input = td.querySelector("input");
     if (input) updated[td.dataset.field] = input.value;
   });
-
   if (Object.keys(updated).length === 0) return;
-
   await api(`/api/edit_credit/${id}`, {
     method: "POST",
     headers: {"content-type": "application/json"},
     body: JSON.stringify(updated)
   });
-
-  loadRecords(true); // reload table after save
+  loadRecords(true);
 }
-// <--------- Filter customer list -------- >
+
 async function filterCustomerList() {
     const term = document.getElementById("cust-filter").value.trim().toLowerCase();
     const ul = document.getElementById("customers");
     ul.innerHTML = "";
-
-    if (!term) return; // if input is empty, hide the list
-
+    if (!term) return;
     const data = await api("/api/customers");
-
-    const matched = data.customers.filter(c => c.toLowerCase().includes(term));
-    
+    const matched = (data.customers || []).filter(c => c.toLowerCase().includes(term));
     matched.forEach(c => {
         const li = document.createElement("li");
         li.style.padding = "6px";
@@ -539,7 +428,7 @@ async function filterCustomerList() {
             document.getElementById("pay-customer").value = c;
             document.getElementById("purchase-customer").value = c;
             filterRecords(c);
-            ul.innerHTML = ""; // hide the list after selection
+            ul.innerHTML = "";
         };
         ul.appendChild(li);
     });
@@ -548,12 +437,8 @@ async function filterCustomerList() {
 async function onTypingCustomer(e) {
     let typed = e.target.value.trim().toLowerCase();
     if (!typed) return;
-
-    // Get customer list from backend
     const data = await api("/api/customers");
-    const customers = data.customers.map(c => c.toLowerCase());
-
-    // If new customer typed → clear table
+    const customers = (data.customers || []).map(c => c.toLowerCase());
     if (!customers.includes(typed)) {
         clearRecordsTable();
     }
@@ -577,58 +462,124 @@ async function downloadCSV(){
 
 async function loadUsers() {
     const ul = document.getElementById("user-list");
-
-    // If list is already visible, hide it
     if (ul.innerHTML.trim() !== "") {
         ul.innerHTML = "";
         return;
     }
-
-    // Otherwise, fetch and display users
-    const res = await fetch("/api/users", {
-        credentials: "include"  // send session cookie
-    });
-
+    const res = await fetch("/api/users", { credentials: "include" });
     if (!res.ok) {
         const text = await res.text();
-        alert("Error loading users: " + res.status + "\n" + text);
+        alert("Error loading users: " + res.status + "\\n" + text);
         return;
     }
-
     const data = await res.json();
     ul.innerHTML = "";
-
     data.users.forEach(u => {
         const li = document.createElement("li");
         li.style.padding = "6px";
-
         li.innerHTML = `
             ${u.username} (${u.role})
-            <button onclick="deleteUser('${u.username}')" style="background:#d9534f;color:white;margin-left:10px">Delete</button>
+            <button onclick="deleteUser('${u.username}')" style="background:#d9534f;color:white;margin-left:10px;border:none;padding:6px 8px;border-radius:6px;cursor:pointer">Delete</button>
         `;
-
         ul.appendChild(li);
     });
 }
 
 async function deleteUser(username) {
     if (!confirm("Delete user '" + username + "'?")) return;
-
-    let res = await fetch("/api/delete_user/" + username, { 
-        method: "DELETE",
-        credentials: "include"
-    });
-
-    let data = await res.json();   // <-- read API response
-
+    let res = await fetch("/api/delete_user/" + username, { method: "DELETE", credentials: "include" });
+    let data = await res.json();
     if (!res.ok) {
         alert("Error: " + (data.detail || data.message || "Unknown error"));
         return;
     }
-
-    alert(data.message);  // <-- show actual message from API
+    alert(data.message);
     loadUsers();
 }
+
+const suggestionInputs = [
+  { inputId: "credit-customer", suggestId: "credit-suggest" },
+  { inputId: "pay-customer", suggestId: "pay-suggest" },
+  { inputId: "purchase-customer", suggestId: "purchase-suggest" }
+];
+
+// Store selected indices per input
+const selectedIndices = {};
+
+async function showCustomerSuggestions(inputId, suggestId) {
+    const input = document.getElementById(inputId);
+    const ul = document.getElementById(suggestId);
+    ul.innerHTML = "";
+    selectedIndices[inputId] = -1;
+
+    const term = input.value.trim().toLowerCase();
+    if (!term) return;
+
+    const data = await api("/api/customers");
+    const matched = (data.customers || []).filter(c => c.toLowerCase().includes(term));
+
+    matched.forEach((c, index) => {
+        const li = document.createElement("li");
+        li.textContent = c;
+        li.onclick = () => {
+            input.value = c;
+            ul.innerHTML = "";
+            filterRecords(c);
+        };
+        ul.appendChild(li);
+    });
+}
+
+// Handle arrow keys for a specific input
+function handleArrowKeys(inputId, suggestId, event) {
+    const ul = document.getElementById(suggestId);
+    const items = ul.querySelectorAll("li");
+    if (!items.length) return;
+
+    if (selectedIndices[inputId] === undefined) selectedIndices[inputId] = -1;
+
+    if (event.key === "ArrowDown") {
+        selectedIndices[inputId] = (selectedIndices[inputId] + 1) % items.length;
+        updateHighlight(items, inputId);
+        event.preventDefault();
+    } else if (event.key === "ArrowUp") {
+        selectedIndices[inputId] = (selectedIndices[inputId] - 1 + items.length) % items.length;
+        updateHighlight(items, inputId);
+        event.preventDefault();
+    } else if (event.key === "Enter") {
+        if (selectedIndices[inputId] >= 0 && selectedIndices[inputId] < items.length) {
+            document.getElementById(inputId).value = items[selectedIndices[inputId]].textContent;
+            ul.innerHTML = "";
+            filterRecords(document.getElementById(inputId).value);
+        }
+        event.preventDefault();
+    }
+}
+
+function updateHighlight(items, inputId) {
+    const idx = selectedIndices[inputId];
+    items.forEach((li, i) => li.classList.toggle("highlight", i === idx));
+}
+
+// Close suggestions if click outside
+document.addEventListener("click", (e) => {
+    suggestionInputs.forEach(f => {
+        const ul = document.getElementById(f.suggestId);
+        const input = document.getElementById(f.inputId);
+        if (!input.contains(e.target) && !ul.contains(e.target)) {
+            ul.innerHTML = "";
+        }
+    });
+});
+
+// Attach events
+suggestionInputs.forEach(f => {
+    const input = document.getElementById(f.inputId);
+    input.parentElement.style.position = "relative"; // ensure absolute works
+    input.addEventListener("input", () => showCustomerSuggestions(f.inputId, f.suggestId));
+    input.addEventListener("keydown", (e) => handleArrowKeys(f.inputId, f.suggestId, e));
+    input.addEventListener("input", onTypingCustomer);
+});
 
 document.getElementById("credit-customer").addEventListener("input", onTypingCustomer);
 document.getElementById("pay-customer").addEventListener("input", onTypingCustomer);

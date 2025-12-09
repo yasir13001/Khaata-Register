@@ -196,9 +196,8 @@ def read_credits():
 def add_credit(customer, amount, description, owner):
     conn = get_db_connection()
     c = conn.cursor()
-    from datetime import datetime
     now = datetime.now()
-    date, time = now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S")
+    date, time = now.strftime("%d:%m:%y"), now.strftime("%H:%M:%S")
     
     # Compute balance
     c.execute("SELECT SUM(credit)-SUM(payment) FROM credits WHERE customer=?", (customer,))
@@ -964,71 +963,215 @@ def filter_data(request: Request, data: dict):
 
     return {"results": [dict(r) for r in rows]}
 
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from reportlab.lib import colors
 from io import BytesIO
 from fastapi.responses import StreamingResponse
 
 @app.post("/api/filter/pdf")
 def filter_pdf(data: dict, request: Request):
+    """
+    Generate an invoice-style PDF for filtered results.
+    - Groups records by customer and generates one "invoice block" per customer.
+    - Amount column shows credits as positive and payments as negative (signed numbers).
+    - Shows Subtotal, Total Credits, Total Payments, Final Balance.
+    - Generates a QR code containing an invoice hash like INVXXXX-2025.
+    - Shows a large 'PAID' (green) or 'UNPAID' (red) stamp depending on the final balance.
+    """
+
     user = require_login(request)
 
-    # Reuse your filter logic
-    filtered = filter_data(request, data)["results"]
+    # Reuse your filter logic endpoint function (returns {"results": [...]})
+    filtered_resp = filter_data(request, data)
+    filtered = filtered_resp.get("results", [])
 
-    # Group records by customer
+    # Group by customer
     grouped = {}
     for row in filtered:
-        cust = row["customer"]
+        cust = row.get("customer") or row.get("Customer") or "Unknown"
         grouped.setdefault(cust, []).append(row)
 
+    # --- imports local to function to avoid global dependency issues ---
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    import qrcode
+    from PIL import Image as PILImage
+
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=40, rightMargin=40, topMargin=60, bottomMargin=40)
     elements = []
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
+    h_center = ParagraphStyle("h_center", parent=styles["Heading1"], alignment=TA_CENTER, fontSize=16)
+    small_right = ParagraphStyle("small_right", parent=styles["Normal"], alignment=TA_RIGHT, fontSize=10)
+
+    # Company header (will appear for each customer block)
+    company_name = "Zia Computers & Documentation Center"
+    company_addr_lines = [
+        "Shop #7 (Basement Building No. S-37), Opp HBL Malir Cantt Bazaar, Karachi",
+        "Phone: 03212068722   Email: ziacompter2021@gmail.com"
+    ]
+
+    now_str = datetime.now().strftime("%d:%m:%Y %H:%M:%S")
 
     for customer, records in grouped.items():
-        # Customer title
-        elements.append(Table([[f"Customer: {customer}"]], colWidths=[500]))
-        elements[-1].setStyle(TableStyle([
-            ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0,0), (-1,-1), 12),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
-        ]))
+        # --- Header block ---
+        elements.append(Paragraph(company_name, ParagraphStyle("cmp", parent=styles["Title"], alignment=TA_CENTER, fontSize=18)))
+        for ln in company_addr_lines:
+            elements.append(Paragraph(ln, ParagraphStyle("addr", parent=styles["Normal"], alignment=TA_CENTER, fontSize=9)))
+        elements.append(Spacer(1, 6))
 
-        # Table header + rows
-        table_data = [["Date", "Description", "Credit", "Payment", "Balance", "Owner"]]
+        # Centered Invoice title + invoice id
+        invoice_id = f"INV{uuid.uuid4().hex[:6].upper()}-{datetime.now().year}"
+        elements.append(Paragraph("INVOICE", h_center))
+        elements.append(Paragraph(f"Invoice ID: {invoice_id}", ParagraphStyle("inv_id", parent=normal, alignment=TA_CENTER, fontSize=9)))
+        elements.append(Paragraph(f"Generated: {now_str}", ParagraphStyle("gen", parent=normal, alignment=TA_CENTER, fontSize=8)))
+        elements.append(Spacer(1, 12))
+
+        # Table header & rows. We present single Amount column with signed values.
+        table_data = [
+            ["Date", "Description", "Amount", "Balance"]
+        ]
+
+        customer_heading = Paragraph(
+            f"<b>Customer Name:</b> {customer}",
+            ParagraphStyle("custhead", parent=normal, fontSize=12, spaceAfter=6)
+        )
+        elements.append(customer_heading)
+
+        total_credits = 0.0
+        total_payments = 0.0
+        subtotal = 0.0
+
+        # Ensure consistent ordering (you can change sort as needed)
+        # If record uses lower/upper keys, handle both
+        def get_val(r, k, default=""):
+            return r.get(k) if k in r else r.get(k.capitalize(), default)
+
         for r in records:
-            table_data.append([
-                r["date"],
-                r.get("description", ""),
-                r.get("credit", ""),
-                r.get("payment", ""),
-                r.get("balance", ""),
-                r.get("owner", "")
-            ])
+            date = get_val(r, "date", "")
+            desc = get_val(r, "description", "")
+            # credit & payment may be strings -- convert to float safely
+            try:
+                credit = float(get_val(r, "credit", 0) or 0)
+            except Exception:
+                credit = 0.0
+            try:
+                payment = float(get_val(r, "payment", 0) or 0)
+            except Exception:
+                payment = 0.0
 
-        t = Table(table_data, colWidths=[60, 180, 50, 50, 50, 80])
+            # Amount: credit positive, payment negative
+            amount = credit - payment  # credit adds, payment subtracts
+            # Running balance: if the row contains balance, try to use it, else compute running subtotal
+            try:
+                balance = float(get_val(r, "balance", subtotal + amount) or (subtotal + amount))
+            except Exception:
+                subtotal = subtotal + amount
+                balance = subtotal
+            else:
+                subtotal = balance  # keep running in sync if balance provided
+
+            # accumulate totals
+            total_credits += credit
+            total_payments += payment
+            # subtotal is running / final balance at end
+
+            # format numbers nicely with two decimals, show +/- for amounts
+            amt_str = f"{amount:+.2f}"
+            bal_str = f"{balance:.2f}"
+
+            table_data.append([date, desc, amt_str, bal_str])
+
+        final_balance = subtotal
+        # Prepare summary rows (we'll add these below the table)
+        # Build ReportLab table
+        col_widths = [80, 260, 70, 70]  # adjust to fit A4
+        t = Table(table_data, colWidths=col_widths, hAlign="LEFT")
         t.setStyle(TableStyle([
-            ('GRID', (0,0), (-1,-1), 1, colors.black),        # borders
-            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),  # header background
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#bbbbbb")),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f2f4f7")),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('ALIGN', (2,1), (4,-1), 'RIGHT'),               # credit/payment/balance right
+            ('ALIGN', (2,1), (3,-1), 'RIGHT'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('FONTSIZE', (0,0), (-1,-1), 10),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
         ]))
         elements.append(t)
-        elements.append(Table([[" "]]))  # spacing between customers
+        elements.append(Spacer(1, 10))
 
+        # Summary table: Subtotal / Total Credits / Total Payments / Final Balance
+        summ = [
+            ["Subtotal:", f"{sum((float(get_val(r,'credit',0) or 0) - float(get_val(r,'payment',0) or 0)) for r in records):.2f}"],
+            ["Total Credits:", f"{total_credits:.2f}"],
+            ["Total Payments:", f"{total_payments:.2f}"],
+            ["Final Balance:", f"{final_balance:.2f}"]
+        ]
+        s_table = Table(summ, colWidths=[360, 120], hAlign="RIGHT")
+        s_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,-1), 10),
+            ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+        elements.append(s_table)
+        elements.append(Spacer(1, 12))
+
+        # QR code generation for invoice_id
+        # QR encodes the invoice id (like INVxxxx-YYYY). You could change text here.
+        qr_text = invoice_id  # e.g. "INV12345-2025"
+        try:
+            qr_img = qrcode.make(qr_text)
+            img_buffer = BytesIO()
+            qr_img.save(img_buffer, format="PNG")
+            img_buffer.seek(0)
+            rl_img = Image(img_buffer, width=100, height=100)
+        except Exception:
+            rl_img = Paragraph(f"[QR: {qr_text}]", normal)
+
+        # PAID / UNPAID stamp
+        paid_flag = (final_balance <= 0)
+        stamp_text = "PAID" if paid_flag else "UNPAID"
+        stamp_color = colors.HexColor("#2e8b57") if paid_flag else colors.HexColor("#d9534f")
+        stamp_paragraph = Paragraph(f"<b>{stamp_text}</b>", ParagraphStyle("stamp", parent=styles["Heading2"],
+                                                                           alignment=TA_CENTER, textColor=stamp_color, fontSize=18))
+
+        # Put QR and stamp in a two-column table
+        footer_table = Table([
+            [rl_img, stamp_paragraph]
+        ], colWidths=[110, 360])
+        footer_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(footer_table)
+
+        # Footer note
+        footer_note = Paragraph(
+            "Invoice is generated by computer; it does not require a signature.",
+            ParagraphStyle("note", parent=normal, alignment=TA_CENTER, fontSize=8, textColor=colors.HexColor("#555555"))
+        )
+        elements.append(Spacer(1, 8))
+        elements.append(footer_note)
+
+        # Page break between customers
+        elements.append(Spacer(1, 24))
+        from reportlab.platypus import PageBreak
+        elements.append(PageBreak())
+
+    # Build PDF
     doc.build(elements)
+
     buffer.seek(0)
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=filtered_report.pdf"}
+        headers={"Content-Disposition": f"attachment; filename={invoice_id}.pdf"}
     )
 
 def get_local_ip():
@@ -1078,19 +1221,19 @@ if __name__ == "__main__":
     
     # <------for development mode-------->
     # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    # uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
     
 
 # for delivery mode
 # To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
-    cfg = load_config()
-    uvicorn.run(
-        app,
-        host=cfg["host"],
-        port=cfg["port"],
-        log_level=cfg["log_level"],
-        access_log=cfg["access_log"],
-    )
+    # cfg = load_config()
+    # uvicorn.run(
+    #     app,
+    #     host=cfg["host"],
+    #     port=cfg["port"],
+    #     log_level=cfg["log_level"],
+    #     access_log=cfg["access_log"],
+    # )
 
 
 
