@@ -46,6 +46,7 @@ if not os.path.exists("static"):
     os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
 #-----Database config --------
 
 DB_FILE = "app.db"
@@ -925,6 +926,7 @@ def filter_data(request: Request, data: dict):
     balance_min = data.get("balance_min")
     balance_max = data.get("balance_max")
     owner = data.get("owner")
+
     sql = "SELECT * FROM credits WHERE 1=1"
     params = []
 
@@ -952,7 +954,7 @@ def filter_data(request: Request, data: dict):
         sql += " AND owner = ?"
         params.append(owner)
 
-    # Always restrict to logged-in user unless admin
+    # Restrict to logged-in user unless admin
     if get_user_role(user) != "admin":
         sql += " AND owner = ?"
         params.append(user)
@@ -962,6 +964,7 @@ def filter_data(request: Request, data: dict):
     conn.close()
 
     return {"results": [dict(r) for r in rows]}
+
 
 from io import BytesIO
 from fastapi.responses import StreamingResponse
@@ -1014,7 +1017,7 @@ def filter_pdf(data: dict, request: Request):
         "Phone: 03212068722   Email: ziacompter2021@gmail.com"
     ]
 
-    now_str = datetime.now().strftime("%d:%m:%Y %H:%M:%S")
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     for customer, records in grouped.items():
         # --- Header block ---
@@ -1221,19 +1224,19 @@ if __name__ == "__main__":
     
     # <------for development mode-------->
     # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    # uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
     
 
 # for delivery mode
 # To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
-    # cfg = load_config()
-    # uvicorn.run(
-    #     app,
-    #     host=cfg["host"],
-    #     port=cfg["port"],
-    #     log_level=cfg["log_level"],
-    #     access_log=cfg["access_log"],
-    # )
+    cfg = load_config()
+    uvicorn.run(
+        app,
+        host=cfg["host"],
+        port=cfg["port"],
+        log_level=cfg["log_level"],
+        access_log=cfg["access_log"],
+    )
 
 
 
