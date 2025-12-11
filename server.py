@@ -1224,19 +1224,19 @@ if __name__ == "__main__":
     
     # <------for development mode-------->
     # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    # uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
     
 
 # for delivery mode
 # To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
-    cfg = load_config()
-    uvicorn.run(
-        app,
-        host=cfg["host"],
-        port=cfg["port"],
-        log_level=cfg["log_level"],
-        access_log=cfg["access_log"],
-    )
+    # cfg = load_config()
+    # uvicorn.run(
+    #     app,
+    #     host=cfg["host"],
+    #     port=cfg["port"],
+    #     log_level=cfg["log_level"],
+    #     access_log=cfg["access_log"],
+    # )
 
 
 
