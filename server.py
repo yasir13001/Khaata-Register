@@ -1228,7 +1228,7 @@ if __name__ == "__main__":
     
 
 # for delivery mode
-# To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" server.py
+# To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" --noconsole server.py
     # cfg = load_config()
     # uvicorn.run(
     #     app,

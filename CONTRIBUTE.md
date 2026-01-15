@@ -145,7 +145,6 @@ If you'd like, I can also generate:
 ✅ A full Roadmap.md  
 ✅ Code comments & structure improvements  
 
----
 ## ⭐ Thank You
 
 We appreciate your time and effort in helping make the Khaata App better for everyone.
