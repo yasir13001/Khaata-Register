@@ -965,6 +965,83 @@ def filter_data(request: Request, data: dict):
 
     return {"results": [dict(r) for r in rows]}
 
+class TransferRequest(BaseModel):
+    from_customer: str
+    to_customer: str
+    amount: Decimal
+    description: str | None = None
+
+@app.post("/api/transfer")
+def transfer_balance(req: TransferRequest, request: Request):
+    user = require_login(request)
+
+    if req.from_customer == req.to_customer:
+        raise HTTPException(status_code=400, detail="Cannot transfer to same customer")
+
+    if req.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    # Check sufficient balance
+    from_balance = compute_balance(req.from_customer)
+    if from_balance < req.amount:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+
+    now = datetime.now()
+    date = now.strftime(DATE_FORMAT)
+    time = now.strftime("%H:%M:%S")
+
+    desc = req.description or f"Transfer {req.amount} from {req.from_customer} to {req.to_customer}"
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        # ---- Debit FROM customer (payment) ----
+        new_from_balance = from_balance - req.amount
+        cur.execute("""
+            INSERT INTO credits (Date, Time, Customer, Description, Credit, Payment, Balance, Owner)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            date, time,
+            req.from_customer,
+            f"Transfer to {req.to_customer}",
+            "0",
+            str(req.amount),
+            str(new_from_balance),
+            user
+        ))
+
+        # ---- Credit TO customer ----
+        to_balance = compute_balance(req.to_customer)
+        new_to_balance = to_balance + req.amount
+        cur.execute("""
+            INSERT INTO credits (Date, Time, Customer, Description, Credit, Payment, Balance, Owner)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            date, time,
+            req.to_customer,
+            f"Transfer from {req.from_customer}",
+            str(req.amount),
+            "0",
+            str(new_to_balance),
+            user
+        ))
+
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+    return {
+        "status": "success",
+        "from": req.from_customer,
+        "to": req.to_customer,
+        "amount": str(req.amount)
+    }
+
 
 from io import BytesIO
 from fastapi.responses import StreamingResponse
@@ -1223,20 +1300,20 @@ if __name__ == "__main__":
     # uvicorn.run(app,host=cfg.get("host", "0.0.0.0"),port=cfg.get("port", 8080),log_level=cfg.get("log_level", "info"),access_log=cfg.get("access_log", True))
     
     # <------for development mode-------->
-    # To run uvicorn on terminal: uvicorn server:app --reload --host 192.168.10.6 --port 8080
-    uvicorn.run("server:app",host="192.168.10.6" ,reload=True , log_level="info",access_log=True)
+    # To run uvicorn on terminal: uvicorn server:app --reload --host 0.0.0.0 --port 8080
+    # uvicorn.run("server:app",host="0.0.0.0" ,reload=True , log_level="info",access_log=True)
     
 
 # for delivery mode
 # To build .exe :pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" --noconsole server.py
-    # cfg = load_config()
-    # uvicorn.run(
-    #     app,
-    #     host=cfg["host"],
-    #     port=cfg["port"],
-    #     log_level=cfg["log_level"],
-    #     access_log=cfg["access_log"],
-    # )
+    cfg = load_config()
+    uvicorn.run(
+        app,
+        host=cfg["host"],
+        port=cfg["port"],
+        log_level=cfg["log_level"],
+        access_log=cfg["access_log"],
+    )
 
 
 

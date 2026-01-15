@@ -157,6 +157,35 @@
           </div>
 
           <div class="action-card card">
+            <h4 style="color:#007acc;margin-top:0">Transfer Balance</h4>
+
+            <div class="form-row">
+              <label>From</label>
+              <input id="transfer-from" placeholder="From customer">
+            </div>
+
+            <div class="form-row">
+              <label>To</label>
+              <input id="transfer-to" placeholder="To customer">
+            </div>
+
+            <div class="form-row">
+              <label>Amount</label>
+              <input id="transfer-amount" type="number" step="0.01">
+            </div>
+
+            <div class="form-row">
+              <label>Note</label>
+              <input id="transfer-desc" placeholder="Optional description">
+            </div>
+
+            <div class="form-row-btn">
+              <button class="btn" onclick="transferBalance()">Transfer</button>
+            </div>
+          </div>
+
+
+          <div class="action-card card">
             <h4 style="color:#007acc;margin-top:0">Add Purchase</h4>
             <div class="form-row">
               <label for="purchase-customer">Customer</label>
@@ -528,6 +557,33 @@ async function showCustomerSuggestions(inputId, suggestId) {
         };
         ul.appendChild(li);
     });
+}
+
+async function transferBalance() {
+    const from_customer = document.getElementById("transfer-from").value.trim();
+    const to_customer = document.getElementById("transfer-to").value.trim();
+    const amount = document.getElementById("transfer-amount").value;
+    const description = document.getElementById("transfer-desc").value;
+
+    if (!from_customer || !to_customer || !amount) {
+        alert("Fill all required fields");
+        return;
+    }
+
+    const res = await fetch("/api/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from_customer, to_customer, amount, description })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+        alert(data.detail || "Transfer failed");
+        return;
+    }
+
+    alert("Transfer successful");
+    loadRecords(true);
 }
 
 // Handle arrow keys for a specific input
